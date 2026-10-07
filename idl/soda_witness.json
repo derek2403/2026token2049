@@ -1,0 +1,667 @@
+{
+  "address": "5v97wLYgMzyfQfpZWGQ6uPXTHh4JsJitUXPReYy2uuTp",
+  "metadata": {
+    "name": "soda_witness",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "init_config",
+      "discriminator": [
+        23,
+        235,
+        115,
+        232,
+        168,
+        96,
+        1,
+        231
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "forwarder_program",
+          "type": "pubkey"
+        },
+        {
+          "name": "forwarder_state",
+          "type": "pubkey"
+        },
+        {
+          "name": "workflow_owner",
+          "type": {
+            "array": [
+              "u8",
+              20
+            ]
+          }
+        },
+        {
+          "name": "workflow_name",
+          "type": {
+            "array": [
+              "u8",
+              10
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "on_report",
+      "docs": [
+        "Called by the keystone forwarder via CPI; the name fixes the",
+        "discriminator to [214,173,18,221,173,148,151,208]."
+      ],
+      "discriminator": [
+        214,
+        173,
+        18,
+        221,
+        173,
+        148,
+        151,
+        208
+      ],
+      "accounts": [
+        {
+          "name": "state"
+        },
+        {
+          "name": "forwarder_authority",
+          "docs": [
+            "PDA [\"forwarder\", state, this program] under the forwarder; checked in on_report."
+          ],
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "claim",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "metadata",
+          "type": "bytes"
+        },
+        {
+          "name": "report",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "open_claim",
+      "docs": [
+        "Creates the caller's Pending claim. It must exist before the report",
+        "arrives, because no payer reaches `on_report`."
+      ],
+      "discriminator": [
+        222,
+        101,
+        161,
+        226,
+        92,
+        247,
+        44,
+        252
+      ],
+      "accounts": [
+        {
+          "name": "requester",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "claim",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  97,
+                  105,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "requester"
+              },
+              {
+                "kind": "arg",
+                "path": "chain_id"
+              },
+              {
+                "kind": "arg",
+                "path": "tx_hash"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "chain_id",
+          "type": "u64"
+        },
+        {
+          "name": "tx_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_config",
+      "docs": [
+        "Switches between the mock and production forwarders, or pins the workflow."
+      ],
+      "discriminator": [
+        108,
+        158,
+        154,
+        175,
+        212,
+        98,
+        52,
+        66
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "forwarder_program",
+          "type": "pubkey"
+        },
+        {
+          "name": "forwarder_state",
+          "type": "pubkey"
+        },
+        {
+          "name": "workflow_owner",
+          "type": {
+            "array": [
+              "u8",
+              20
+            ]
+          }
+        },
+        {
+          "name": "workflow_name",
+          "type": {
+            "array": [
+              "u8",
+              10
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Claim",
+      "discriminator": [
+        155,
+        70,
+        22,
+        176,
+        123,
+        215,
+        246,
+        102
+      ]
+    },
+    {
+      "name": "Config",
+      "discriminator": [
+        155,
+        12,
+        170,
+        224,
+        30,
+        250,
+        204,
+        130
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "ClaimOpened",
+      "discriminator": [
+        149,
+        209,
+        22,
+        4,
+        147,
+        156,
+        128,
+        152
+      ]
+    },
+    {
+      "name": "ClaimRecorded",
+      "discriminator": [
+        46,
+        183,
+        32,
+        80,
+        59,
+        171,
+        138,
+        224
+      ]
+    },
+    {
+      "name": "WitnessRecorded",
+      "discriminator": [
+        167,
+        46,
+        15,
+        114,
+        190,
+        74,
+        3,
+        156
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "NotAdmin",
+      "msg": "Signer is not the config admin"
+    },
+    {
+      "code": 6001,
+      "name": "MismatchedForwarderProgram",
+      "msg": "Forwarder state is not owned by config.forwarder_program"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidForwarderState",
+      "msg": "Forwarder state is not config.forwarder_state"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidForwarderAuthority",
+      "msg": "forwarder_authority is not the PDA for this state, receiver and forwarder program"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidMetadataLength",
+      "msg": "Metadata must be 64 bytes"
+    },
+    {
+      "code": 6005,
+      "name": "WorkflowOwnerMismatch",
+      "msg": "Metadata workflow_owner does not match config"
+    },
+    {
+      "code": 6006,
+      "name": "WorkflowNameMismatch",
+      "msg": "Metadata workflow_name does not match config"
+    },
+    {
+      "code": 6007,
+      "name": "InvalidReportLength",
+      "msg": "Report must be a 106-byte Borsh WitnessReport"
+    },
+    {
+      "code": 6008,
+      "name": "UnsupportedReportVersion",
+      "msg": "Unsupported WitnessReport version"
+    },
+    {
+      "code": 6009,
+      "name": "ClaimNotPending",
+      "msg": "Claim is not Pending"
+    },
+    {
+      "code": 6010,
+      "name": "ChainIdMismatch",
+      "msg": "Report chain_id does not match the claim"
+    },
+    {
+      "code": 6011,
+      "name": "TxHashMismatch",
+      "msg": "Report tx_hash does not match the claim"
+    }
+  ],
+  "types": [
+    {
+      "name": "Claim",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "requester",
+            "type": "pubkey"
+          },
+          {
+            "name": "chain_id",
+            "type": "u64"
+          },
+          {
+            "name": "tx_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "docs": [
+              "STATUS_PENDING or STATUS_RECORDED."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "from",
+            "type": {
+              "array": [
+                "u8",
+                20
+              ]
+            }
+          },
+          {
+            "name": "to",
+            "type": {
+              "array": [
+                "u8",
+                20
+              ]
+            }
+          },
+          {
+            "name": "value_wei",
+            "type": "u128"
+          },
+          {
+            "name": "block",
+            "type": "u64"
+          },
+          {
+            "name": "success",
+            "type": "bool"
+          },
+          {
+            "name": "recorded_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ClaimOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "claim",
+            "type": "pubkey"
+          },
+          {
+            "name": "requester",
+            "type": "pubkey"
+          },
+          {
+            "name": "chain_id",
+            "type": "u64"
+          },
+          {
+            "name": "tx_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ClaimRecorded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "claim",
+            "type": "pubkey"
+          },
+          {
+            "name": "requester",
+            "type": "pubkey"
+          },
+          {
+            "name": "success",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Config",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "forwarder_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "forwarder_state",
+            "type": "pubkey"
+          },
+          {
+            "name": "workflow_owner",
+            "docs": [
+              "All zeros skips the check."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                20
+              ]
+            }
+          },
+          {
+            "name": "workflow_name",
+            "docs": [
+              "All zeros skips the check."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                10
+              ]
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WitnessRecorded",
+      "docs": [
+        "Also puts `WitnessReport` in the IDL, which `cre generate-bindings` needs."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "report",
+            "type": {
+              "defined": {
+                "name": "WitnessReport"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "WitnessReport",
+      "docs": [
+        "Borsh payload the CRE workflow writes (106 bytes)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ver",
+            "type": "u8"
+          },
+          {
+            "name": "chain_id",
+            "type": "u64"
+          },
+          {
+            "name": "tx_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "type": {
+              "array": [
+                "u8",
+                20
+              ]
+            }
+          },
+          {
+            "name": "to",
+            "type": {
+              "array": [
+                "u8",
+                20
+              ]
+            }
+          },
+          {
+            "name": "value_wei",
+            "type": "u128"
+          },
+          {
+            "name": "block",
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "docs": [
+              "EVM receipt status: 1 success, 0 reverted."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}
