@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "next typegen && tsc --noEmit",
     "solver": "tsx services/solver/src/index.ts",
     "cli": "tsx scripts/intents-cli.ts",
     "test:lib": "tsx --test lib/intents/*.test.ts",
