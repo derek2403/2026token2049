@@ -44,6 +44,10 @@ export async function intentHistory(
       events.push({ event, signature, blockTimeMs });
       const ref = { txHash: signature, timestamp: blockTimeMs };
       if (event.name === "IntentOpened" && event.intent.equals(intent)) refs.open = ref;
+      // RFQ: the signed intent opens and fills in one transaction.
+      if (event.name === "Other" && event.eventName === "SignedIntentExecuted" && String(event.data.intent) === intent.toBase58()) {
+        refs.open = ref;
+      }
       if (event.name === "IntentFilled" && event.intent.equals(intent)) refs.matched = ref;
       if (event.name === "IntentCancelled" && event.intent.equals(intent)) refs.cancelled = ref;
     }
