@@ -1,0 +1,38 @@
+# Web page image (Next.js standalone server). Build context is the repo root:
+#   docker build -f Dockerfile.web .
+# NEXT_PUBLIC_* are inlined into the browser bundle at build time, so they are
+# build args; Railway passes service variables with matching names as args.
+
+FROM node:22.20-slim AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts --no-audit --no-fund
+
+FROM node:22.20-slim AS build
+WORKDIR /app
+# Public, keyless endpoints only: everything here ends up in the browser.
+ARG NEXT_PUBLIC_SOLANA_RPC_URL=https://solana-devnet.api.onfinality.io/public
+ARG NEXT_PUBLIC_SOLANA_WS_URL=wss://solana-devnet.api.onfinality.io/public-ws
+ARG NEXT_PUBLIC_INTENTS_PROGRAM_ID
+ARG NEXT_PUBLIC_SODA_PROGRAM_ID
+ENV NEXT_PUBLIC_SOLANA_RPC_URL=$NEXT_PUBLIC_SOLANA_RPC_URL \
+    NEXT_PUBLIC_SOLANA_WS_URL=$NEXT_PUBLIC_SOLANA_WS_URL \
+    NEXT_PUBLIC_INTENTS_PROGRAM_ID=$NEXT_PUBLIC_INTENTS_PROGRAM_ID \
+    NEXT_PUBLIC_SODA_PROGRAM_ID=$NEXT_PUBLIC_SODA_PROGRAM_ID \
+    NEXT_TELEMETRY_DISABLED=1
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npx next build
+
+FROM node:22.20-slim AS run
+WORKDIR /app
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000
+COPY --from=build --chown=node:node /app/.next/standalone ./
+COPY --from=build --chown=node:node /app/.next/static ./.next/static
+COPY --from=build --chown=node:node /app/public ./public
+USER node
+EXPOSE 3000
+# Server-only variables (SOLVER_URLS, BASE_RPC_URL, SOLANA_RPC_URL) are read at
+# runtime from the service's variables. server.js listens on $PORT; HOSTNAME is
+# forced here because a platform may set it to the container's own name.
+CMD ["sh", "-c", "HOSTNAME=0.0.0.0 exec node server.js"]
