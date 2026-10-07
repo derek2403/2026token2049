@@ -1,0 +1,33 @@
+Initializing...
+Loading settings...
+Checking RPC connectivity...
+Compiling workflow...
+✓ Workflow compiled
+✓ Simulation limits enabled
+  HTTP: req=120kb resp=250kb timeout=10s | ConfHTTP: req=125kb resp=500kb timeout=1m30s | Consensus obs=25kb | ChainWrite evm_report=50kb evm_gas=10000000 solana_report=265b solana_cu=300000 | WASM binary=100mb compressed=20mb
+  Binary hash: 5340941e90d63d02ffbef3264c8fbbcc2b1c7ed1cc12b562f611e4fb9d2fb808
+  Config hash: a06a7160aaa3476712f98bbf5f05ae5cefbe816563b1308d414abadb44ddc19f
+✓ Loaded JSON from file: /Users/derek/Developer/2026token2049/cre/payloads/sign.json
+✓ Created HTTP trigger payload with 1 fields
+2026-10-07T22:29:13Z [SIMULATION] Simulator Initialized
+
+2026-10-07T22:29:13Z [SIMULATION] Running trigger trigger=http-trigger@1.0.0-alpha
+2026-10-07T22:29:13Z [USER LOG] Sign request: sigRequest=FkTeqFX1TVB1U34TbSJSLamBRHPdww8obCm86rd2m7tR
+2026-10-07T22:29:16Z [USER LOG] Signature: r=6dfb0c61bfb13ea00c658de9f2e9a5ab67b7523add36c7f8d600005983933fea s=2182a108c214506595b9cbeb7adf3ff71a0d9262a48134a5574e204cf6dc53fa recovery_id=1
+2026-10-07T22:29:21Z [USER LOG] Finalized FkTeqFX1TVB1U34TbSJSLamBRHPdww8obCm86rd2m7tR: tx=4y9mewnHMssvSWuVQzQMSXU4XA94owrLjTkWxx1rZBVe7tZ9FVoqCFp8RVvXsS4R38Di7L8FXFoZ59Gm7AhBJuvq explorer=https://explorer.solana.com/tx/4y9mewnHMssvSWuVQzQMSXU4XA94owrLjTkWxx1rZBVe7tZ9FVoqCFp8RVvXsS4R38Di7L8FXFoZ59Gm7AhBJuvq?cluster=devnet
+
+✓ Workflow Simulation Result:
+{
+  "RecoveryId": 1,
+  "SigRequest": "FkTeqFX1TVB1U34TbSJSLamBRHPdww8obCm86rd2m7tR",
+  "Signature": "4y9mewnHMssvSWuVQzQMSXU4XA94owrLjTkWxx1rZBVe7tZ9FVoqCFp8RVvXsS4R38Di7L8FXFoZ59Gm7AhBJuvq"
+}
+
+2026-10-07T22:29:21Z [SIMULATION] Execution finished signal received
+2026-10-07T22:29:21Z [SIMULATION] Skipping WorkflowEngineV2
+
+╭──────────────────────────────────────────────────────╮
+│ Simulation complete! Ready to deploy your workflow?  │
+│                                                      │
+│ Run cre account access to request deployment access. │
+╰──────────────────────────────────────────────────────╯
