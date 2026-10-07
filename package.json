@@ -12,7 +12,15 @@
     "cli": "tsx scripts/intents-cli.ts",
     "test:lib": "tsx --test lib/intents/*.test.ts",
     "test:solver": "tsx --test services/solver/src/*.test.ts",
-    "test:programs": "tsx --test programs/tests/*.test.ts"
+    "test:programs": "tsx --test programs/tests/*.test.ts",
+    "mpc:install": "npm --prefix mpc install",
+    "mpc:typecheck": "npm --prefix mpc run typecheck",
+    "mpc:test": "npm --prefix mpc test",
+    "mpc:dkg": "npm --prefix mpc run dkg",
+    "mpc:node": "npm --prefix mpc run node",
+    "mpc:coordinator": "npm --prefix mpc run coordinator",
+    "mpc:subscriber": "npm --prefix mpc run subscriber",
+    "mpc:relayer": "npm --prefix mpc run relayer"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
