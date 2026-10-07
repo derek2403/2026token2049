@@ -1,0 +1,32 @@
+{
+  "name": "soda-mpc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SODA MPC committee (prior work, moved in from github.com/derek2403/frontier): two Lindell '17 2-of-2 ECDSA nodes, the coordinator, the SigRequested subscriber and the EthTxRequested relayer.",
+  "workspaces": [
+    "node",
+    "coordinator",
+    "subscriber",
+    "relayer"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces",
+    "test": "npm test -w mpc-node && npm test -w mpc-relayer",
+    "dkg": "mkdir -p node/shares && npm run dkg -w mpc-node -- shares/share-p1.json shares/share-p2.json",
+    "node": "npm start -w mpc-node",
+    "node:p1": "MPC_ROLE=p1 PORT=8001 MPC_SHARE_PATH=shares/share-p1.json npm start -w mpc-node",
+    "node:p2": "MPC_ROLE=p2 PORT=8002 MPC_SHARE_PATH=shares/share-p2.json npm start -w mpc-node",
+    "coordinator": "npm start -w mpc-coordinator",
+    "subscriber": "npm start -w mpc-subscriber",
+    "relayer": "npm start -w mpc-relayer",
+    "aio": "node scripts/mpc-all-in-one.mjs",
+    "update-committee": "npm run update-committee -w mpc-node --",
+    "e2e": "npm run e2e -w mpc-node"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.17",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3"
+  }
+}
