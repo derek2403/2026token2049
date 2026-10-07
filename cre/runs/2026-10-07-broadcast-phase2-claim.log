@@ -1,0 +1,36 @@
+Initializing...
+Loading settings...
+Checking RPC connectivity...
+Compiling workflow...
+✓ Workflow compiled
+✓ Simulation limits enabled
+  HTTP: req=120kb resp=250kb timeout=10s | ConfHTTP: req=125kb resp=500kb timeout=1m30s | Consensus obs=25kb | ChainWrite evm_report=50kb evm_gas=10000000 solana_report=265b solana_cu=300000 | WASM binary=100mb compressed=20mb
+  Binary hash: 975d82acbefc6d6d2f9cde301906c86e3469347d515dd28280c6e95824914e28
+  Config hash: 3dde069af1e3e53a87e3b889da69328f2c05fd9bc60b6ac44e6dd16163fa3838
+✓ Loaded JSON from file: /Users/derek/Developer/2026token2049/cre/payloads/claim.json
+✓ Created HTTP trigger payload with 2 fields
+2026-10-07T19:23:35Z [SIMULATION] Simulator Initialized
+
+2026-10-07T19:23:35Z [SIMULATION] Running trigger trigger=http-trigger@1.0.0-alpha
+2026-10-07T19:23:35Z [USER LOG] Witness request: claim=FwFutiPUmmfaMHq6xBcm7quLXi2qbpfhfg1egiMm6AsW tx=0xb3997391723ebddc8b0514b4604e5dbff942115dd952d041cba4e14753c5c08c
+2026-10-07T19:23:35Z [USER LOG] Facts: from=0x31777694f7b90b635b1f3b786f5d24be7651be7b to=0x7662920f66682d8996ec6b6d9e4ac9ed25a1006c value=100000000000000000 block=47801952 status=1 confirmations=11
+2026-10-07T19:23:37Z [USER LOG] Recorded claim FwFutiPUmmfaMHq6xBcm7quLXi2qbpfhfg1egiMm6AsW: tx=5ZqG2ZMLemTMAqBT3ZnMqvMCCpJoZCpNhxsUU9E37kxDXHjZUWorv944EXd27mq5YkdsU7cYL7CoD24kPKCGTGxN explorer=https://explorer.solana.com/tx/5ZqG2ZMLemTMAqBT3ZnMqvMCCpJoZCpNhxsUU9E37kxDXHjZUWorv944EXd27mq5YkdsU7cYL7CoD24kPKCGTGxN?cluster=devnet
+
+✓ Workflow Simulation Result:
+{
+  "Block": "47801952",
+  "Claim": "FwFutiPUmmfaMHq6xBcm7quLXi2qbpfhfg1egiMm6AsW",
+  "Confirmations": "11",
+  "Signature": "5ZqG2ZMLemTMAqBT3ZnMqvMCCpJoZCpNhxsUU9E37kxDXHjZUWorv944EXd27mq5YkdsU7cYL7CoD24kPKCGTGxN",
+  "Success": true,
+  "TxHash": "0xb3997391723ebddc8b0514b4604e5dbff942115dd952d041cba4e14753c5c08c"
+}
+
+2026-10-07T19:23:37Z [SIMULATION] Execution finished signal received
+2026-10-07T19:23:37Z [SIMULATION] Skipping WorkflowEngineV2
+
+╭──────────────────────────────────────────────────────╮
+│ Simulation complete! Ready to deploy your workflow?  │
+│                                                      │
+│ Run cre account access to request deployment access. │
+╰──────────────────────────────────────────────────────╯
