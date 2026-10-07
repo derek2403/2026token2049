@@ -75,6 +75,8 @@ async function main(): Promise<void> {
     otherBumpAfterMs: 60_000,
     includeSigRent: envStr("INCLUDE_SIG_RENT", "1") !== "0",
     checkRecipientCode: envStr("CHECK_RECIPIENT_CODE", "1") !== "0",
+    includeIntentRent: envStr("INCLUDE_INTENT_RENT", "1") !== "0",
+    rfqQuoteTtlMs: envNum("RFQ_QUOTE_TTL_MS", 30_000),
   };
   if (settings.spreadBps < 0n || settings.spreadBps >= 10_000n) throw new Error("SPREAD_BPS must be in [0, 10000)");
 
@@ -110,7 +112,7 @@ async function main(): Promise<void> {
   await bot.start();
   const port = envNum("PORT", 8080);
   const server = startServer(bot, port);
-  console.log(`quote server on :${port} (GET /quote?inLamports=, GET /health)`);
+  console.log(`quote server on :${port} (GET /quote?inLamports=, POST /rfq/quote, POST /rfq/execute, GET /health)`);
 
   const shutdown = async () => {
     await bot.stop();
