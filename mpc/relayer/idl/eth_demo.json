@@ -1,0 +1,145 @@
+{
+  "address": "9JMr3TNHk2Mh7TQsaoxkfDmLFE3naYcAwcsgkKv3BBXx",
+  "events": [
+    {
+      "discriminator": [
+        177,
+        159,
+        87,
+        157,
+        4,
+        162,
+        34,
+        5
+      ],
+      "name": "EthTxRequested"
+    }
+  ],
+  "instructions": [
+    {
+      "accounts": [
+        {
+          "name": "user",
+          "signer": true,
+          "writable": true
+        },
+        {
+          "name": "committee"
+        },
+        {
+          "name": "sig_request",
+          "writable": true
+        },
+        {
+          "name": "soda_program"
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "to",
+          "type": {
+            "array": [
+              "u8",
+              20
+            ]
+          }
+        },
+        {
+          "name": "value_wei_be",
+          "type": {
+            "array": [
+              "u8",
+              16
+            ]
+          }
+        },
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "gas_price_wei",
+          "type": "u64"
+        },
+        {
+          "name": "gas_limit",
+          "type": "u64"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        },
+        {
+          "name": "chain_id",
+          "type": "u64"
+        },
+        {
+          "name": "chain_tag",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "derivation_seeds",
+          "type": "bytes"
+        }
+      ],
+      "discriminator": [
+        232,
+        23,
+        138,
+        149,
+        252,
+        89,
+        241,
+        156
+      ],
+      "docs": [
+        "`foreign_pk_xy` is gone: soda now derives the foreign key itself from",
+        "the signer, so this program cannot name an address on a user's behalf",
+        "and a malicious client cannot name one at all.",
+        "",
+        "`data` is the transaction calldata. Empty for a plain ETH transfer; a",
+        "contract call (e.g. Aave's depositETH) puts its ABI-encoded selector +",
+        "args here. The program does not interpret it — it is RLP-encoded into",
+        "the payload like any other field, so the signature commits to it."
+      ],
+      "name": "sign_eth_transfer"
+    }
+  ],
+  "metadata": {
+    "description": "SODA ETH demo harness — Sepolia value transfer via CPI to soda",
+    "name": "eth_demo",
+    "spec": "0.1.0",
+    "version": "0.1.0"
+  },
+  "types": [
+    {
+      "name": "EthTxRequested",
+      "type": {
+        "fields": [
+          {
+            "name": "sig_request",
+            "type": "pubkey"
+          },
+          {
+            "name": "chain_id",
+            "type": "u64"
+          },
+          {
+            "name": "unsigned_rlp",
+            "type": "bytes"
+          }
+        ],
+        "kind": "struct"
+      }
+    }
+  ]
+}
