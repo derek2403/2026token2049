@@ -1,0 +1,31 @@
+{
+  "name": "mpc-node",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SODA MPC signer node: one party (p1 or p2) of Lindell '17 2-of-2 ECDSA.",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "dkg": "tsx scripts/dkg.ts",
+    "e2e": "tsx scripts/e2e-mpc.ts",
+    "update-committee": "tsx scripts/update-committee.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@noble/curves": "1.9.7",
+    "@noble/hashes": "1.8.0",
+    "@safeheron/two-party-ecdsa-js": "1.0.1",
+    "@solana/web3.js": "1.98.4",
+    "bn.js": "5.2.3",
+    "fastify": "5.8.5"
+  },
+  "devDependencies": {
+    "@types/bn.js": "5.2.0",
+    "@types/node": "22.19.17",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vitest": "2.1.9"
+  }
+}
