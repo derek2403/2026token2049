@@ -1,0 +1,25 @@
+# Build context for Dockerfile.web and services/solver/Dockerfile (repo root).
+# Secrets and local build output never enter an image.
+.env
+.env.*
+!.env.example
+cre/.env
+*.pem
+*-keypair.json
+
+.git
+node_modules
+**/node_modules
+.next
+out
+build
+coverage
+*.tsbuildinfo
+next-env.d.ts
+
+# Not needed by the web page or the solver.
+cre
+programs
+runs
+scripts
+HANDOVER.md
