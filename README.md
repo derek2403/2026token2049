@@ -1,11 +1,12 @@
-# SODA Intents and SODA Witness
+# SODA Intents, SODA Witness and SODA Signer
 
 TOKEN2049 Origins, October 2026.
 
 | Build | Track | One line |
 |---|---|---|
-| **SODA Intents** | Solana | Sell SOL on Solana and receive native ETH on Base. Solvers race in an on-chain Dutch auction, one Solana transaction settles the trade, and a threshold committee signs the Base payout. |
-| **SODA Witness** | Chainlink CRE | A CRE workflow reads a Base Sepolia transaction, the nodes agree on what happened, and the facts are written into a Solana program as a `Claim`. |
+| **SODA Intents** | Solana | Sell SOL on Solana and receive native ETH on Base, two ways. **Auction** (1inch Fusion-style): solvers race in an on-chain Dutch auction. **RFQ** (NEAR Intents-style): solvers quote, the user signs one gasless message, and the winning solver settles it. In both modes one Solana transaction settles the trade and a threshold committee signs the native Base payout. |
+| **SODA Witness** | Chainlink CRE | A CRE workflow reads a Base Sepolia transaction, the nodes agree on what happened, and the facts are written into a Solana program as a `Claim`. Solvers' deposits are credited from these claims. |
+| **SODA Signer** | Chainlink CRE | A CRE workflow drives the MPC committee: it picks up a pending signature request, gets the 2-of-2 signature from the committee, and writes `finalize_signature` to Solana through Chainlink's forwarder. |
 
 **Live page:** https://web-production-734ea.up.railway.app (Solana devnet → Base Sepolia; connect Phantom set to devnet). The two solver bots run next to it on Railway.
 
@@ -25,7 +26,10 @@ SODA itself is prior work from [github.com/derek2403/frontier](https://github.co
 | SDK files copied into `lib/soda/` (derive, rlp, EthRpc, EVM chain tag), each marked at the top of the file | `services/solver`: an AMM solver bot that prices from Pyth, fills, delivers Base payouts itself, and bumps stuck ones |
 | `eth_rlp.rs`, copied into `programs/programs/intents/src/` and credited | `app/`: a swap page modelled on 1inch Fusion+, with an order drawer and an Activity panel |
 | frontier's `pnpm verify` audit tool (used to check our payouts, not copied) | `lib/intents`: PDAs, decoders, auction math, the status machine and payout tracking, shared by the page, the bot and the CLIs |
-| | `scripts/`: `intents-cli.ts`, `witness-cli.ts`, `demo-rejected-fill.ts` |
+| | RFQ mode (`execute_signed_intent`, user vaults, ed25519 verification via the instructions sysvar), the `/api/rfq` relay, and the solvers' `/rfq` endpoints |
+| | `programs/programs/soda_cre_signer` + `cre/soda-signer`: CRE drives the MPC committee's signing |
+| 2-of-2 MPC committee source (nodes, coordinator, subscriber, relayer), moved into [`mpc/`](mpc/README.md) unchanged apart from imports | |
+| | `scripts/`: `intents-cli.ts`, `witness-cli.ts`, `demo-rejected-fill.ts`, `cre-sign-payload.ts` |
 
 The workflow started from Chainlink's [`solana-read-write-ts` template](https://github.com/smartcontractkit/cre-templates/tree/main/building-blocks/solana-read-write/solana-read-write-ts) (MIT).
 
@@ -39,9 +43,10 @@ The workflow started from Chainlink's [`solana-read-write-ts` template](https://
 | Solver A / Solver B | `D5pwjGzqvgvuFt4rtMVf1ta4RKXWyGGfG2ekh5KuDfZw` / `CozgNEdiG93qqo8cxXeXddvuT3F1Gh6zHr4VLro1sZ54` |
 | `soda_witness` program | [`5v97wLYgMzyfQfpZWGQ6uPXTHh4JsJitUXPReYy2uuTp`](https://explorer.solana.com/address/5v97wLYgMzyfQfpZWGQ6uPXTHh4JsJitUXPReYy2uuTp?cluster=devnet) |
 | `soda_witness` Config | [`5Dxc9Y6sWUwvcLUhatWAHmBwVnKfUXPu5cuWccZZCNRY`](https://explorer.solana.com/address/5Dxc9Y6sWUwvcLUhatWAHmBwVnKfUXPu5cuWccZZCNRY?cluster=devnet), set to the Chainlink **mock** forwarder `7kuEAA3mSC1Tz8gQjnvH7bKFda9xSPRRin9SZbH49cNK` |
+| `soda_cre_signer` program (CRE receiver that finalizes SODA signatures) | [`2cgtuK2Y9BQ8uMbVpYwM9FZ7TVkSqu9xegNTyBp3taxM`](https://explorer.solana.com/address/2cgtuK2Y9BQ8uMbVpYwM9FZ7TVkSqu9xegNTyBp3taxM?cluster=devnet), Config `3pf5T3w2U3G2KjjtJFygRtaSRQqJP8G6HUxzqRt3LXYz` (mock forwarder) |
 | `soda` (prior work) / Committee PDA | `CPAEfBXpMMsUrjLNhDYxaCH79DYvFHJFC27fttnxAL1J` / `9mX3oHUmsrYvzXjCo35HhfXufrGZT3hjsLoC74xbA6SS` |
 
-The devnet `intents` build includes Phase 2: `credit_solver_from_claim`, the per-deposit `Credit` record and the `deposit_from` proof. It was upgraded in place, and its rollout is logged in [`runs/witness-devnet.md`](runs/witness-devnet.md#phase-2-a-solver-deposit-credited-from-a-witness-claim-links-both-builds).
+The devnet `intents` build includes the RFQ mode (vaults and signed intents) and Phase 2: `credit_solver_from_claim`, the per-deposit `Credit` record and the `deposit_from` proof. It was upgraded in place, and its rollout is logged in [`runs/witness-devnet.md`](runs/witness-devnet.md#phase-2-a-solver-deposit-credited-from-a-witness-claim-links-both-builds).
 
 ## Demo evidence
 
@@ -75,6 +80,18 @@ We also ran the maker's cancel path: `open_intent`, then `cancel_intent` (the 0.
 3. The claim is now **Recorded** with `from 0x3177…be7b`, `to 0x7662…006c` (the pool), `value 1 ETH`, `block 47799710` and `success true`.
 
 ---
+
+### RFQ (NEAR Intents-style): one signed message, settled by the best solver
+
+[Run log](runs/intents-devnet.md#rfq-near-intents-style-signed-intent-no-user-transaction-per-swap). The user's first trade needs a one-time `deposit_sol` into their vault. After that, the flow is:
+1. The relay (`/api/rfq` on the live page) collects quotes from both Railway solvers: 2.5 s.
+2. The user signs a readable message in Phantom. This is not a transaction.
+3. The winning solver submits it, and the program verifies the ed25519 signature on-chain and settles: 2.0 s ([tx](https://explorer.solana.com/tx/2716rjKShHPb3HSTSAAYzBApxJkSf2j81fSKg9vxCteQoPzcRcWUxSQZnDqDiFNefkcBrHBFBZ5vwU4SJY4To4fP?cluster=devnet)).
+4. Native ETH arrives on Base **6.9 s after publishing** ([Basescan](https://sepolia.basescan.org/tx/0xa1950f8726c05730a3b4dc184bd7aa538fb4f7ffb3434bd273052ccc5c7f9753)).
+
+### SODA Signer: Chainlink CRE drives the MPC committee
+
+[Run log](runs/cre-signer-devnet.md). The committee's own subscriber was paused for 46 s, so CRE did the signing. CRE read the pending SigRequest, got the 2-of-2 signature from the coordinator (3 s), and wrote it through Chainlink's forwarder → `soda_cre_signer::on_report` → `soda::finalize_signature` ([tx](https://explorer.solana.com/tx/4y9mewnHMssvSWuVQzQMSXU4XA94owrLjTkWxx1rZBVe7tZ9FVoqCFp8RVvXsS4R38Di7L8FXFoZ59Gm7AhBJuvq?cluster=devnet)). The user's ETH landed on Base ([Basescan](https://sepolia.basescan.org/tx/0xe09c7e26ffd8bcf2f82cd54c7a634d6b38b6d28eef9e860f0384003442250ced)). soda checks the signature itself with `secp256k1_recover`, so even the mock forwarder cannot forge a finalize.
 
 ## How it works
 
@@ -141,6 +158,17 @@ If every check passes, it credits the solver's ledger. A `Credit` PDA at `["cred
 | [Across](https://docs.across.to/reference/contract-addresses/solana) | Relayers fill and are repaid in bundles | UMA optimistic oracle |
 | [1inch Fusion+](https://help.1inch.com/en/articles/9842591-what-is-1inch-fusion-and-how-does-it-work) | Escrows on both chains, tied by a secret hash | Resolvers, plus the user's browser revealing the secret |
 | [Ika](https://solana-pre-alpha.ika.xyz/getting-started/concepts) | A signing primitive on Solana, not an intent protocol | The Solana pre-alpha uses one mock signer |
+
+**SODA compared with the two designs it borrows from:**
+
+| | NEAR Intents | 1inch Fusion+ | SODA |
+|---|---|---|---|
+| Price discovery | Off-chain RFQ among solvers | Dutch auction run by 1inch's relayer | Both: an on-chain Dutch auction started from the best quote, or RFQ with a signed intent |
+| User action | Sign a `token_diff` message (after a bridge deposit) | Sign an order, then reveal a secret | One Solana transaction (auction), or one signed message after a vault deposit (RFQ) |
+| Settlement | Verifier contract on NEAR | Escrows on both chains plus a hash-time-lock | One Solana transaction; no contract on Base |
+| Destination asset | Bridge-minted token, then a bridge withdrawal | Native, from the resolver's destination escrow | Native ETH from an address the Solana program controls (SODA MPC) |
+| Closing the tab | Fine | "Do not close the tab" until the secret is revealed | Fine |
+| Solvers | KYC'd market makers in the Verifier | Whitelisted, staked resolvers | Any registered solver. Deposits are proven by Chainlink CRE (Witness), and signing can run through CRE (Signer). |
 
 Escrow designs need a contract on both chains and a cross-chain message, and oracle designs add a trusted attester. SODA Intents settles in one Solana transaction, with no contract on Base and no fill message. NEAR Chain Signatures has the same shape but settles on NEAR. Fusion+ tells users "do not close the tab" because the browser holds a secret; with SODA the user holds no secret, so the page says "Safe to close this tab."
 
@@ -221,10 +249,11 @@ app/                    Next.js 16 swap page and API routes (quotes, payout, gro
 lib/intents/            shared client code: PDAs, decoders, auction math, status machine, payout tracking, witness claim decoder
 lib/soda/               SDK files copied from frontier (prior work)
 idl/                    soda.json (copied), intents.json and soda_witness.json (built)
-programs/               Anchor workspace: programs/intents, programs/soda_witness, LiteSVM tests
-cre/                    CRE project: soda-witness workflow, payloads, broadcast logs in runs/
+programs/               Anchor workspace: programs/intents, programs/soda_witness, programs/soda_cre_signer, LiteSVM tests
+cre/                    CRE project: soda-witness and soda-signer workflows, payloads, broadcast logs in runs/
+mpc/                    SODA 2-of-2 MPC committee services (prior work, moved in from frontier): node, coordinator, subscriber, relayer
 services/solver/        solver bot (Dockerfile, README)
-scripts/                intents-cli, witness-cli, demo-rejected-fill
+scripts/                intents-cli, witness-cli, demo-rejected-fill, cre-sign-payload
 railway/                Railway service configs
 runs/                   devnet evidence logs
 HANDOVER.md             full design spec
