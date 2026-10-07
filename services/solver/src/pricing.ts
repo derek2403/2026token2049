@@ -8,6 +8,13 @@ import { GAS_LIMIT } from "../../../lib/intents";
 export const SIG_REQUEST_RENT_LAMPORTS = 2_413_000n;
 /** One signature's base fee. */
 export const SOLANA_BASE_FEE_LAMPORTS = 5_000n;
+/**
+ * RFQ: rent of the 331-byte Intent the solver creates in execute_signed_intent.
+ * close_intent refunds it to the user, so to the solver it is a cost.
+ */
+export const INTENT_RENT_LAMPORTS = 3_194_640n;
+/** RFQ: the Ed25519 precompile's signature is charged like a transaction signature. */
+export const ED25519_VERIFY_FEE_LAMPORTS = 5_000n;
 
 const LAMPORTS_PER_SOL = 10n ** 9n;
 const BPS = 10_000n;
