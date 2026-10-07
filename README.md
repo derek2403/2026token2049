@@ -209,7 +209,7 @@ npm run test:programs     # LiteSVM: both programs, including every Phase 2 chec
 npm run test:lib          # lib/intents, including decoding the live claim's bytes
 npm run test:solver       # services/solver
 cd cre/soda-witness && bun install && bun test                  # the workflow against the CRE SDK test runtime
-npx tsc --noEmit
+npm run typecheck         # next typegen (route types), then tsc
 ```
 
 **Hosting.** The page and both bots run as three Railway services (`web`, `solver-a`, `solver-b`) in the `soda-intents` project. The page is at https://web-production-734ea.up.railway.app, and the bots are reachable only on Railway's private network. [`railway/README.md`](railway/README.md) has the variables and steps. The SODA committee runs in its own Railway project. The bots find intents by polling `getSignaturesForAddress` on the program through a keyed RPC, so they need neither WebSockets nor `getProgramAccounts`.
