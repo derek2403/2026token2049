@@ -1,0 +1,25 @@
+[toolchain]
+anchor_version = "0.32.1"
+solana_version = "3.1.10"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+intents = "BV9KfzKwXPp9hQZEyhoVm9STbDy7gCGCmKcKpCDr8jXA"
+soda_witness = "5v97wLYgMzyfQfpZWGQ6uPXTHh4JsJitUXPReYy2uuTp"
+
+[programs.devnet]
+intents = "BV9KfzKwXPp9hQZEyhoVm9STbDy7gCGCmKcKpCDr8jXA"
+soda_witness = "5v97wLYgMzyfQfpZWGQ6uPXTHh4JsJitUXPReYy2uuTp"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/token2049-deployer.json"
+
+[scripts]
+test = "cargo test --manifest-path tests/Cargo.toml -- --nocapture"
