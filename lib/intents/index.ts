@@ -8,4 +8,5 @@ export * from "./accounts";
 export * from "./status";
 export * from "./rpc";
 export * from "./witness";
+export * from "./rfq";
 export { INTENTS_IDL } from "./idl";
