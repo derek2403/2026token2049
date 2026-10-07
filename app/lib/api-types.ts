@@ -78,6 +78,31 @@ export type SigningTiming = {
   msApprox: number;
   /** e.g. "≈2.8 s (7 slots)". */
   label: string;
+  /** Who finalized the signature on Solana (see SignerInfo). */
+  via?: SignerVia;
+  /** The finalize_signature tx (same as toTx when found). */
+  finalizeTx?: string;
+};
+
+export type SignerVia = "chainlink-cre" | "mpc-subscriber" | "pending";
+
+/** Who signed the Base payout: Chainlink CRE driving the MPC committee, or the committee's own subscriber. */
+export type SignerInfo = {
+  via: SignerVia;
+  finalizeTx?: string;
+  /** Chainlink forwarder used (chainlink-cre only). */
+  forwarder?: "mock" | "production";
+  /** e.g. "Chainlink CRE (soda-signer, mock forwarder)". */
+  label: string;
+};
+
+/** Static "who does what" map for the UI, with `sign` filled from SignerInfo.via. */
+export type ProvidersMap = {
+  quote: string;
+  settle: string;
+  sign: SignerVia;
+  deliver: string;
+  depositProof: string;
 };
 
 export type PayoutResponse = {
@@ -88,6 +113,10 @@ export type PayoutResponse = {
   isRfq: boolean;
   /** Set once the first SigRequest is signed and both txs are found. */
   signing?: SigningTiming;
+  /** Always present: "pending" until the first SigRequest is finalized. */
+  signer: SignerInfo;
+  /** Which component (Chainlink or not) handles each stage of this order. */
+  providers: ProvidersMap;
   candidates: {
     index: number;
     sigRequest: string;
