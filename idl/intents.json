@@ -672,6 +672,248 @@
       ]
     },
     {
+      "name": "deposit_sol",
+      "docs": [
+        "Funds the caller's RFQ vault. The first deposit creates it."
+      ],
+      "discriminator": [
+        108,
+        81,
+        78,
+        117,
+        125,
+        155,
+        56,
+        200
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "execute_signed_intent",
+      "docs": [
+        "RFQ settlement. The solver signs the transaction (NEAR's",
+        "set_auth_by_predecessor_id); the user's authorization is an Ed25519",
+        "program instruction over `rfq::render_message(args)`. Pays `out_wei` on",
+        "Base exactly like `fill`, then takes `sell_lamports` from the vault."
+      ],
+      "discriminator": [
+        49,
+        58,
+        113,
+        246,
+        124,
+        7,
+        90,
+        212
+      ],
+      "accounts": [
+        {
+          "name": "solver_authority",
+          "docs": [
+            "The winning solver: pays the Intent and SigRequest rent, receives the SOL."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "solver",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  108,
+                  118,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "solver_authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "args.user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "intent",
+          "docs": [
+            "Exists once per (user, nonce): a replayed signature fails here."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "args.user"
+              },
+              {
+                "kind": "arg",
+                "path": "args.nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "committee",
+          "address": "9mX3oHUmsrYvzXjCo35HhfXufrGZT3hjsLoC74xbA6SS"
+        },
+        {
+          "name": "sig_request",
+          "writable": true
+        },
+        {
+          "name": "pool",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "soda_program",
+          "address": "CPAEfBXpMMsUrjLNhDYxaCH79DYvFHJFC27fttnxAL1J"
+        },
+        {
+          "name": "instructions",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SignedIntentArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "fill",
       "discriminator": [
         168,
@@ -1366,6 +1608,60 @@
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "withdraw_sol",
+      "docs": [
+        "Ignores pause: users can always take their SOL back."
+      ],
+      "discriminator": [
+        145,
+        131,
+        74,
+        136,
+        65,
+        137,
+        42,
+        38
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "user_vault"
+          ]
+        },
+        {
+          "name": "user_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -1419,6 +1715,19 @@
         40,
         95,
         77
+      ]
+    },
+    {
+      "name": "UserVault",
+      "discriminator": [
+        23,
+        76,
+        96,
+        159,
+        210,
+        10,
+        5,
+        22
       ]
     },
     {
@@ -1502,6 +1811,19 @@
       ]
     },
     {
+      "name": "SignedIntentExecuted",
+      "discriminator": [
+        26,
+        46,
+        88,
+        128,
+        240,
+        88,
+        191,
+        41
+      ]
+    },
+    {
       "name": "SolverCredited",
       "discriminator": [
         160,
@@ -1538,6 +1860,32 @@
         161,
         46,
         165
+      ]
+    },
+    {
+      "name": "VaultDeposited",
+      "discriminator": [
+        59,
+        62,
+        43,
+        200,
+        220,
+        104,
+        100,
+        67
+      ]
+    },
+    {
+      "name": "VaultWithdrew",
+      "discriminator": [
+        60,
+        122,
+        230,
+        14,
+        174,
+        208,
+        77,
+        236
       ]
     },
     {
@@ -1689,6 +2037,36 @@
       "code": 6026,
       "name": "DepositFromNotProven",
       "msg": "deposit_sig is not deposit_from's signature over the register message"
+    },
+    {
+      "code": 6027,
+      "name": "InvalidSignatureInstruction",
+      "msg": "Not a single-signature Ed25519 instruction verifying its own data"
+    },
+    {
+      "code": 6028,
+      "name": "SignatureMismatch",
+      "msg": "Ed25519 signer or message does not match the intent"
+    },
+    {
+      "code": 6029,
+      "name": "DeadlinePassed",
+      "msg": "Signed intent deadline has passed"
+    },
+    {
+      "code": 6030,
+      "name": "DeadlineTooFar",
+      "msg": "Signed intent deadline is more than 600 s away"
+    },
+    {
+      "code": 6031,
+      "name": "InsufficientVaultBalance",
+      "msg": "Vault SOL balance is too low"
+    },
+    {
+      "code": 6032,
+      "name": "ZeroRecipient",
+      "msg": "Recipient is the zero address"
     }
   ],
   "types": [
@@ -2083,6 +2461,123 @@
       }
     },
     {
+      "name": "SignedIntentArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "docs": [
+              "The signer: the user's wallet and the vault owner."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "docs": [
+              "Picks the Intent PDA, so it is the user's replay protection."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "deadline",
+            "type": "i64"
+          },
+          {
+            "name": "sell_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "min_out_wei",
+            "type": "u128"
+          },
+          {
+            "name": "recipient",
+            "type": {
+              "array": [
+                "u8",
+                20
+              ]
+            }
+          },
+          {
+            "name": "out_wei",
+            "docs": [
+              "What the solver pays, at least min_out_wei. Not signed by the user."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "expected_nonce",
+            "docs": [
+              "config.next_nonce the solver read (the Base nonce)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "gas_price",
+            "type": "u64"
+          },
+          {
+            "name": "ed25519_ix_index",
+            "docs": [
+              "Position of the Ed25519 program instruction in this transaction."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SignedIntentExecuted",
+      "docs": [
+        "Emitted after EthTxRequested and IntentFilled by execute_signed_intent."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "intent",
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "solver",
+            "docs": [
+              "Solver authority (wallet)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "docs": [
+              "The user's signed nonce, also the Intent's intent_id."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "sell_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "min_out_wei",
+            "type": "u128"
+          },
+          {
+            "name": "out_wei",
+            "type": "u128"
+          },
+          {
+            "name": "base_nonce",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "Solver",
       "type": {
         "kind": "struct",
@@ -2217,6 +2712,74 @@
           {
             "name": "balance_wei",
             "type": "u128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UserVault",
+      "docs": [
+        "A user's SOL for RFQ trades. Seeds [\"vault\", owner]. Holds",
+        "rent-exempt minimum + `sol` lamports (more only if someone sends SOL",
+        "straight to it)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "sol",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VaultDeposited",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "sol",
+            "docs": [
+              "Vault balance after the deposit."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VaultWithdrew",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "sol",
+            "type": "u64"
           }
         ]
       }
