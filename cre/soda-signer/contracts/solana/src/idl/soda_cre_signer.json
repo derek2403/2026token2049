@@ -1,0 +1,401 @@
+{
+  "address": "2cgtuK2Y9BQ8uMbVpYwM9FZ7TVkSqu9xegNTyBp3taxM",
+  "metadata": {
+    "name": "soda_cre_signer",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "init_config",
+      "discriminator": [
+        23,
+        235,
+        115,
+        232,
+        168,
+        96,
+        1,
+        231
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "address": "57Y6siThZ6JUjjpgQ7JT7JUFVk4e1xcAsCDRHJBQUXkE"
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "forwarder_program",
+          "type": "pubkey"
+        },
+        {
+          "name": "forwarder_state",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "on_report",
+      "docs": [
+        "Called by the keystone forwarder via CPI; the name fixes the",
+        "discriminator to [214,173,18,221,173,148,151,208]."
+      ],
+      "discriminator": [
+        214,
+        173,
+        18,
+        221,
+        173,
+        148,
+        151,
+        208
+      ],
+      "accounts": [
+        {
+          "name": "state"
+        },
+        {
+          "name": "forwarder_authority",
+          "docs": [
+            "PDA [\"forwarder\", state, this program] under the forwarder; checked in on_report."
+          ],
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "sig_request",
+          "writable": true
+        },
+        {
+          "name": "committee",
+          "address": "9mX3oHUmsrYvzXjCo35HhfXufrGZT3hjsLoC74xbA6SS"
+        },
+        {
+          "name": "submitter",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  117,
+                  98,
+                  109,
+                  105,
+                  116,
+                  116,
+                  101,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "soda_program",
+          "address": "CPAEfBXpMMsUrjLNhDYxaCH79DYvFHJFC27fttnxAL1J"
+        }
+      ],
+      "args": [
+        {
+          "name": "metadata",
+          "type": "bytes"
+        },
+        {
+          "name": "report",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "set_config",
+      "docs": [
+        "Switches between the mock and production forwarders."
+      ],
+      "discriminator": [
+        108,
+        158,
+        154,
+        175,
+        212,
+        98,
+        52,
+        66
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "address": "57Y6siThZ6JUjjpgQ7JT7JUFVk4e1xcAsCDRHJBQUXkE",
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "forwarder_program",
+          "type": "pubkey"
+        },
+        {
+          "name": "forwarder_state",
+          "type": "pubkey"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Config",
+      "discriminator": [
+        155,
+        12,
+        170,
+        224,
+        30,
+        250,
+        204,
+        130
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "AlreadyFinalized",
+      "discriminator": [
+        205,
+        215,
+        32,
+        188,
+        138,
+        175,
+        150,
+        241
+      ]
+    },
+    {
+      "name": "CreFinalized",
+      "discriminator": [
+        133,
+        146,
+        123,
+        246,
+        63,
+        143,
+        159,
+        231
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "NotAdmin",
+      "msg": "Signer is not the admin"
+    },
+    {
+      "code": 6001,
+      "name": "MismatchedForwarderProgram",
+      "msg": "Forwarder state is not owned by config.forwarder_program"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidForwarderState",
+      "msg": "Forwarder state is not config.forwarder_state"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidForwarderAuthority",
+      "msg": "forwarder_authority is not the PDA for this state, receiver and forwarder program"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidMetadataLength",
+      "msg": "Metadata must be 64 bytes"
+    },
+    {
+      "code": 6005,
+      "name": "InvalidReportLength",
+      "msg": "Report must be a 98-byte Borsh SignerReport"
+    },
+    {
+      "code": 6006,
+      "name": "UnsupportedReportVersion",
+      "msg": "Unsupported SignerReport version"
+    },
+    {
+      "code": 6007,
+      "name": "SigRequestMismatch",
+      "msg": "sig_request account does not match the report"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidSigRequest",
+      "msg": "sig_request is not a valid soda SigRequest"
+    },
+    {
+      "code": 6009,
+      "name": "InvalidCommittee",
+      "msg": "committee is not the soda committee"
+    },
+    {
+      "code": 6010,
+      "name": "InvalidSodaProgram",
+      "msg": "soda_program is not soda"
+    }
+  ],
+  "types": [
+    {
+      "name": "AlreadyFinalized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "sig_request",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Config",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "forwarder_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "forwarder_state",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CreFinalized",
+      "docs": [
+        "Also puts `SignerReport` in the IDL, which `cre generate-bindings` needs."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "report",
+            "type": {
+              "defined": {
+                "name": "SignerReport"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "SignerReport",
+      "docs": [
+        "Borsh payload the CRE workflow writes (98 bytes)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ver",
+            "type": "u8"
+          },
+          {
+            "name": "sig_request",
+            "type": "pubkey"
+          },
+          {
+            "name": "signature",
+            "docs": [
+              "r || s"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          },
+          {
+            "name": "recovery_id",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}
