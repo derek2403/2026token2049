@@ -66,3 +66,32 @@ The user's maker cancel works before any fill. To keep solvers away, this intent
 The page is at https://web-production-734ea.up.railway.app. `solver-a` (30 bps) and `solver-b` (60 bps) run as private services in the same Railway project. The page's `/api/quotes` reaches them over Railway's private network. The bots find intents by polling `getSignaturesForAddress` on the program through Alchemy, with no WebSocket and no `getProgramAccounts`.
 
 - Intent `Eb3vsCjSvE3cAqc9A1QcgdZUZjCGt998AF23mr2dXHP2`, 0.05 SOL, Fast preset, filled by the Railway `solver-a` ([fill](https://explorer.solana.com/tx/3c1QGQWuZqP9gSzwu53EYJncXBUkuQKx9NvJvAnDwFaA3smvc57PRYvhjZtCSvdunSJUmcikx2ZVM11GaCBKm5gZ?cluster=devnet)). 0.002139 ETH reached Base ([Basescan](https://sepolia.basescan.org/tx/0xc5ea174bd5f6aa6f2c7056a1b079f1b9a4721a8f516067246a44a35b3ed6a325)): **5.9 s end to end**, of which open_intent took 1.5 s.
+
+## RFQ, NEAR-Intents style (signed intent, no user transaction per swap)
+
+The program was upgraded with `UserVault`, `deposit_sol` / `withdraw_sol` and `execute_signed_intent`, which verifies an ed25519 signature on-chain through the instructions sysvar. The upgrade rollout: [pause](https://explorer.solana.com/tx/5eE4KxbjJgCE5vhbbTAtvF9U5XZFVddDDYrf4PGFsdzUGrYAhfn6VKMWYDANekbDdD27AQdHt1NHZryC7aJBdjTU?cluster=devnet), upgrade (sha256 `51f74d86…`, IDL upgraded), [unpause](https://explorer.solana.com/tx/4G1Uhe2ULZVbsEqFBucpkq7eRqSD1kJbogaJgFx4K48AiPgFjJQzPVmd4WfvMDQ4xRyUUciJniPEpkVGMy1xBk5Q?cluster=devnet). The relay is the live web service's `/api/rfq`. The solvers are the Railway bots.
+
+| Step | Time | Link |
+|---|---|---|
+| One-time `deposit_sol` of 0.1 SOL into the user's vault | | [tx](https://explorer.solana.com/tx/3J9Xrc2JVdLozXWr3iHZLwjhPkuMSrxfu83QfuZzED18sx8ZoCJu3zphanodmfUDwKehtzKqLhVB8mCKWpmXaGUE?cluster=devnet) |
+| `quote` via the relay: both solvers answered (0.001981752 ETH from A, 0.001975295 ETH from B) | 2.5 s | |
+| User signs the canonical message (below); no transaction | | |
+| `publish_intent`: the relay forwards to the best solver, which submits `[ComputeBudget, Ed25519, execute_signed_intent]` | 2.0 s | [tx](https://explorer.solana.com/tx/2716rjKShHPb3HSTSAAYzBApxJkSf2j81fSKg9vxCteQoPzcRcWUxSQZnDqDiFNefkcBrHBFBZ5vwU4SJY4To4fP?cluster=devnet) |
+| Committee signs; native ETH arrives on Base | **6.9 s from publish** | [Basescan](https://sepolia.basescan.org/tx/0xa1950f8726c05730a3b4dc184bd7aa538fb4f7ffb3434bd273052ccc5c7f9753) |
+
+Intent `AYAMGeYpZXQgyRuzMbBFS15qQRqXs1kNjarTAkngAcg8`. The signed message:
+
+```
+SODA Intents v1
+verifier: BV9KfzKwXPp9hQZEyhoVm9STbDy7gCGCmKcKpCDr8jXA devnet
+signer: JD83fBc825nQn4PAtMFhyrnME41PkrnCXtA6cXin7GX2
+nonce: 5918217656781396460
+deadline: 1791382739
+sell: 50000000 lamports SOL
+receive at least: 1981752018893982 wei ETH
+to: 0xdd8e4c6a974d8a9f1e1e2499878a6c0d7213fad7 on base-sepolia (84532)
+```
+
+### Live web check after the review fixes (2026-10-07 22:35 +08)
+
+All of these were checked against the live service: the page (Auction | RFQ switch), `/api/health`, `/api/group-pk`, `/api/quotes` and `/api/rfq` quote (both Railway solvers). An RFQ trade then went through the live relay: quotes 1.5 s, settled by solver A in 1.9 s ([tx](https://explorer.solana.com/tx/5krFvevsjMttbFwxBeKCNAKSVRMpcvoiwKjsLXMo3Mic4kj9ezexy9epwoEkbnWk6k56WmytXC9riuwrdn5tWqpk?cluster=devnet)), and ETH on Base **7.5 s** after publish ([Basescan](https://sepolia.basescan.org/tx/0x5b8b0a15a0ed2cf8347556bbe3ffdf3b1729a45162789069301bb2f8a955569d)). The live `/api/payout` for intent `2eKzsRVL…` reports `completed`, `isRfq: true`, and the committee signing time measured from slots: `≈5.2 s (13 slots)`.
