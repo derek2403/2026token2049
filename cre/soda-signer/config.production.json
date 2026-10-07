@@ -1,0 +1,9 @@
+{
+  "chainSelector": "16423721717087811551",
+  "receiverProgramId": "2cgtuK2Y9BQ8uMbVpYwM9FZ7TVkSqu9xegNTyBp3taxM",
+  "forwarderProgramId": "CXsKEJcs25TQEYU2e5jZ8QTPE3ffMLZhH6BWHrdcCCB5",
+  "forwarderState": "8QoomCQyPSkJ8WopJbX9B4HyvrFzziwvJdU8hZE6DCr9",
+  "signerConfig": "3pf5T3w2U3G2KjjtJFygRtaSRQqJP8G6HUxzqRt3LXYz",
+  "coordinatorUrl": "https://soda-mpc-coordinator-production.up.railway.app",
+  "authorizedEvmKey": "0xTODO_trigger_signer_address"
+}
