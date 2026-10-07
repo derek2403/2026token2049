@@ -146,3 +146,21 @@ cd cre/soda-witness && cre generate-bindings solana --language typescript
 - **Forwarder state is read-only.** The forwarder state is passed read-only, per the handover. The template marks it writable, but neither forwarder declares it `mut`, and the account hash covers only the keys.
 - **WASM runtime limits.** The forwarder authority PDA comes from `@solana/web3.js` `findProgramAddressSync`, because `crypto.subtle` is missing. The `BASE_RPC_URL` secret is checked with a regex, because zod's `.url()` fails without the `URL` global.
 - **Quota.** The handler makes 3 HTTP calls and 1 secret fetch per run, against limits of 15 and 5. Every request caches for 60 s.
+
+## SODA Signer
+
+`soda-signer/` is a second workflow. It takes `{ sigRequest }` (a pending soda `SigRequest`), and:
+
+1. reads the account over Solana JSON-RPC (secret `SOLANA_RPC_URL`), with identical consensus on `{owner, completed}`, and refuses unless soda (`CPAEf…`) owns it and it is not completed;
+2. calls the MPC coordinator `POST {coordinatorUrl}/sign` with `Authorization: Bearer <MPC_COORDINATOR_TOKEN>`, with identical consensus on `{r, s, v}`;
+3. writes a 98-byte Borsh `SignerReport { ver, sig_request, signature r||s, recovery_id }` to `soda_cre_signer::on_report` (`2cgtuK2…`, Config PDA `3pf5T3w…`), which CPIs soda `finalize_signature` signed by its `["submitter"]` PDA.
+
+```
+HTTP trigger {sigRequest}
+  -> Solana RPC getAccountInfo (identical consensus) -> coordinator /sign (identical consensus)
+  -> SignerReport -> forwarder -> soda_cre_signer::on_report -> soda::finalize_signature
+```
+
+**Why the mock forwarder is not a trust issue here.** Unlike the witness, the report carries no facts that the chain has to take on trust. soda's `finalize_signature` recovers the secp256k1 public key from `signature` and `recovery_id` and checks it against the key stored in the `SigRequest`, so a forged or wrong signature fails on chain whoever sends it. The worst a caller of the mock forwarder can do is deliver a valid signature early, which is the outcome the workflow exists to produce. An already-completed request is a no-op (`AlreadyFinalized`).
+
+Setup: add `SOLANA_RPC_URL_ALL` and `MPC_COORDINATOR_TOKEN_ALL` to `cre/.env`. Test with `cd cre/soda-signer && bun install && bun run typecheck && bun test`. Bindings come from `cre generate-bindings solana` over `idl/soda_cre_signer.json`.
