@@ -673,3 +673,43 @@ test("watcher: after a restart the head payout's fill is older than the backfill
   assert.ok(watcher.stats.olderSigs > 0, "found by paging past the backfill");
   assert.equal(bot.health().pendingPayouts, 1);
 });
+
+// ---------------------------------------------------------------- RFQ
+
+test("RFQ: /rfq/quote prices in the Intent rent, and a settled signed intent is tracked like a fill", async () => {
+  const { fake, bot } = await setup({ startOut: 10n ** 17n, minOut: 9n * 10n ** 16n, nonce: 4n });
+  await bot.start();
+  await bot.ready;
+  await bot.stop();
+  const { ed25519 } = await import("@noble/curves/ed25519");
+  const { encodeSignedIntent, renderIntentMessage, rfqExecuteRequest, vaultPda } = await import("../../../lib/intents");
+
+  const sell = 10n ** 9n;
+  const plain = bot.quote(sell);
+  assert.ok(!("error" in plain));
+  const q = await bot.rfqQuote({ quote_id: "q-1", exact_amount_in: sell.toString() });
+  assert.equal(q.status, 200, JSON.stringify(q.body));
+  const amountOut = BigInt((q.body as { amount_out: string }).amount_out);
+  // 3_194_640 + 5_000 more lamports of cost at ~0.05 ETH/SOL ≈ 1.6e14 wei less.
+  assert.ok(amountOut < plain.outWei && plain.outWei - amountOut < 2n * 10n ** 14n, `${plain.outWei} vs ${amountOut}`);
+
+  const userKp = Keypair.generate();
+  fake.accounts.set(vaultPda(userKp.publicKey, PID)[0].toBase58(), await encode("UserVault", { owner: userKp.publicKey, sol: bn(sell), bump: 254 }));
+  const f = { user: userKp.publicKey, nonce: 42n, deadline: NOW + 120n, sellLamports: sell, minOutWei: amountOut, recipient: new Uint8Array(20).fill(0xcd) };
+  const message = renderIntentMessage(f, PID);
+  const req = rfqExecuteRequest("q-1", f, encodeSignedIntent(message, ed25519.sign(message, userKp.secretKey.slice(0, 32)), f.user));
+  const r = await bot.rfqExecute(req);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+
+  const [intent] = intentPda(userKp.publicKey, 42n, PID);
+  assert.equal((r.body as { intent: string }).intent, intent.toBase58());
+  assert.equal(fake.sent.length, 1);
+  assert.ok(bot.watcher.hasFilled(intent), "the deliver loop will read it");
+  assert.ok(bot.watcher.knowsNonce(4n));
+  const h = bot.health();
+  assert.equal(h.fills, 1);
+  assert.deepEqual(h.rfq, { quotesHeld: 1, quotes: 1, executed: 1, refused: 0 });
+  // The curve moved: the same amount now quotes lower.
+  const again = bot.rfqPrice(sell);
+  assert.ok(!("error" in again) && again.outWei < amountOut);
+});
