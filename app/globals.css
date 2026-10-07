@@ -1,25 +1,26 @@
 @import "tailwindcss";
 
-/* Dark-first palette, loosely after 1inch Fusion+. */
+/* Flat black palette after the 1inch dark theme tokens. */
 :root {
-  --bg: #070b14;
-  --bg-glow: #12204a;
-  --card: #0f1522;
-  --panel: #161e2e;
-  --panel-hover: #1c2639;
-  --line: #222c40;
-  --fg: #eef2fa;
-  --muted: #8c97ad;
-  --faint: #5c6880;
-  --accent: #2f8af5;
-  --accent-hover: #4a9bff;
-  --accent-soft: rgba(47, 138, 245, 0.14);
+  --bg: #000000;
+  --card: #141417;
+  --panel: #1d1d21;
+  --panel-hover: #27272b;
+  --pill-hover: #2e2e30;
+  --subtle: #19191c;
+  --line: #2e2e30;
+  --fg: #ffffff;
+  --muted: #afafb2;
+  --faint: #6c6c70;
+  --accent: #3355ff;
+  --accent-hover: #5c77ff;
+  --accent-soft: rgba(51, 85, 255, 0.16);
   --good: #3ccf91;
   --good-soft: rgba(60, 207, 145, 0.14);
-  --warn: #f5b041;
-  --warn-soft: rgba(245, 176, 65, 0.14);
-  --bad: #ff6b6b;
-  --bad-soft: rgba(255, 107, 107, 0.14);
+  --warn: #ff9e4e;
+  --warn-soft: rgba(255, 158, 78, 0.14);
+  --bad: #f42012;
+  --bad-soft: rgba(244, 32, 18, 0.16);
   color-scheme: dark;
 }
 
@@ -28,6 +29,8 @@
   --color-card: var(--card);
   --color-panel: var(--panel);
   --color-panel-hover: var(--panel-hover);
+  --color-pill-hover: var(--pill-hover);
+  --color-subtle: var(--subtle);
   --color-line: var(--line);
   --color-fg: var(--fg);
   --color-muted: var(--muted);
@@ -41,16 +44,14 @@
   --color-warn-soft: var(--warn-soft);
   --color-bad: var(--bad);
   --color-bad-soft: var(--bad-soft);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
 }
 
 body {
-  background:
-    radial-gradient(1200px 600px at 50% -200px, var(--bg-glow), transparent 70%),
-    var(--bg);
+  background: var(--bg);
   color: var(--fg);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-inter), system-ui, sans-serif;
 }
 
 input[type="number"]::-webkit-inner-spin-button,
@@ -71,23 +72,38 @@ input[type="number"]::-webkit-outer-spin-button {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 .drawer-panel { animation: drawer-in-up 220ms ease-out; }
 @media (min-width: 768px) {
   .drawer-panel { animation: drawer-in-right 220ms ease-out; }
 }
 .toast-in { animation: toast-in 180ms ease-out; }
+.pop-in { animation: pop-in 140ms ease-out; }
+@keyframes toast-timer {
+  from { width: 0; }
+  to { width: 100%; }
+}
+.toast-timer { animation: toast-timer linear forwards; }
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.overlay-in { animation: overlay-in 200ms ease-out; }
 
 /* wallet-adapter-react-ui modal, restyled to the palette. */
 .wallet-adapter-modal-wrapper {
   background: var(--card) !important;
   border: 1px solid var(--line);
-  border-radius: 24px !important;
-  font-family: var(--font-geist-sans), system-ui, sans-serif !important;
+  border-radius: 0 !important;
+  font-family: var(--font-inter), system-ui, sans-serif !important;
 }
 .wallet-adapter-modal-title { color: var(--fg) !important; }
 .wallet-adapter-modal-list .wallet-adapter-button {
-  font-family: var(--font-geist-sans), system-ui, sans-serif !important;
-  border-radius: 14px !important;
+  font-family: var(--font-inter), system-ui, sans-serif !important;
+  border-radius: 0 !important;
 }
 .wallet-adapter-modal-list .wallet-adapter-button:hover { background: var(--panel-hover) !important; }
 .wallet-adapter-modal-button-close { background: var(--panel) !important; }
