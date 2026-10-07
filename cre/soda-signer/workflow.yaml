@@ -1,0 +1,18 @@
+# CRE workflow settings. Simulation always writes through the mock forwarder.
+simulation-settings:
+  user-workflow:
+    workflow-name: "soda-signer"
+    deployment-registry: "private"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.simulation.json"
+    secrets-path: "../secrets.yaml"
+
+production-settings:
+  user-workflow:
+    workflow-name: "soda-signer"
+    deployment-registry: "private"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.production.json"
+    secrets-path: "../secrets.yaml"
