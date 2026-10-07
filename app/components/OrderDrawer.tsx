@@ -46,6 +46,37 @@ function stepTiming(s: Step & { elapsedMs?: number }, data: PayoutResponse): str
   return `${s.id === "open" ? "confirmed in " : "+"}${formatDuration(s.elapsedMs, s.chain === "solana")}`;
 }
 
+/** Chainlink's brand blue, used only to mark the parts Chainlink runs. */
+export const CHAINLINK_BLUE = "#375BD2";
+
+type SigningVia = "chainlink-cre" | "mpc-subscriber" | "pending";
+
+/** Who drove the committee's signature, once /api/payout reports it. */
+function signingVia(data: PayoutResponse): SigningVia | undefined {
+  return (data.signing as { via?: SigningVia } | undefined)?.via;
+}
+
+function SignerPill({ via }: { via: SigningVia | undefined }) {
+  if (via === "chainlink-cre")
+    return (
+      <span
+        className="rounded-full px-2 py-0.5 text-[11px] font-medium text-white"
+        style={{ background: CHAINLINK_BLUE }}
+        title="Chainlink CRE fetched the committee's signature and wrote finalize_signature through Chainlink's forwarder"
+      >
+        Chainlink CRE → SODA MPC
+      </span>
+    );
+  return (
+    <span
+      className="rounded-full bg-panel-hover px-2 py-0.5 text-[11px] font-medium text-muted"
+      title="Signed by the SODA 2-of-2 MPC committee; Solana checks it with secp256k1_recover"
+    >
+      SODA MPC (2-of-2)
+    </span>
+  );
+}
+
 function useNow(active: boolean): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -135,6 +166,7 @@ export function OrderDrawer({
                       {STEP_TITLE[s.id] ?? s.id}
                     </span>
                     <ChainBadge chain={s.chain} />
+                    {(s.id === "signing" || s.id === "signed") && <SignerPill via={signingVia(data)} />}
                   </div>
                   {s.state !== "todo" && <p className="mt-0.5 text-sm text-muted">{s.label}</p>}
                   {s.state !== "todo" && (s.timestamp !== undefined || s.txHash) && (
