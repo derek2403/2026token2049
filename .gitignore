@@ -52,3 +52,10 @@ test-ledger/
 /cre/**/node_modules/
 /cre/**/.cre_build_tmp.js
 /cre/**/*.wasm
+
+/frontier 
+# SODA MPC committee (mpc/): deps and key shares never enter git
+/mpc/**/node_modules/
+/mpc/**/shares/
+share-p*.json
+keyshare*.json
