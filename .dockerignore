@@ -23,3 +23,12 @@ programs
 runs
 scripts
 HANDOVER.md
+
+# SODA MPC (mpc/): key shares and local env never enter an image.
+**/.env
+**/.env.*
+!**/.env.example
+mpc/**/shares
+**/share-p*.json
+**/keyshare*.json
+frontier
