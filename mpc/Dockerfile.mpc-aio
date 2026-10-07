@@ -1,0 +1,36 @@
+# SODA MPC all-in-one container: node p1, node p2 and the coordinator in one
+# image, supervised by mpc/scripts/mpc-all-in-one.mjs.
+#
+#   docker build -f mpc/Dockerfile.mpc-aio -t soda-mpc-aio .     (from the repo root)
+#
+# This exists so the stack fits in a single service. It puts both shares on
+# one filesystem, which defeats the point of 2-of-2 threshold signing. Use
+# mpc/node/Dockerfile twice plus mpc/coordinator/Dockerfile (as the Railway
+# deployment does) when the security claim has to hold.
+#
+# At runtime, mount the two shares and set the coordinator's token:
+#   /etc/secrets/share-p1.json   (or MPC_SHARE_P1_PATH)
+#   /etc/secrets/share-p2.json   (or MPC_SHARE_P2_PATH)
+#   MPC_AUTH_TOKEN=<token callers must present>
+#   SOLANA_RPC_URL, SODA_PROGRAM_ID   (each node re-reads the SigRequest)
+
+FROM node:22-alpine AS deps
+WORKDIR /repo/mpc
+COPY mpc/package.json mpc/package-lock.json ./
+COPY mpc/node/package.json node/
+COPY mpc/coordinator/package.json coordinator/
+COPY mpc/subscriber/package.json subscriber/
+COPY mpc/relayer/package.json relayer/
+RUN npm ci -w mpc-node -w mpc-coordinator --no-audit --no-fund
+
+FROM node:22-alpine
+WORKDIR /repo/mpc
+COPY --from=deps /repo/mpc/node_modules ./node_modules
+COPY mpc/package.json mpc/tsconfig.base.json ./
+COPY mpc/node ./node
+COPY mpc/coordinator ./coordinator
+COPY mpc/scripts/mpc-all-in-one.mjs ./scripts/mpc-all-in-one.mjs
+
+ENV NODE_ENV=production
+EXPOSE 8000
+CMD ["node", "scripts/mpc-all-in-one.mjs"]
