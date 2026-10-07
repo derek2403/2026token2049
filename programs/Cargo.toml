@@ -6,6 +6,7 @@ resolver = "2"
 members = [
     "programs/intents",
     "programs/soda_witness",
+    "programs/soda_cre_signer",
 ]
 
 [workspace.package]
