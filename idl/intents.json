@@ -1,0 +1,2328 @@
+{
+  "address": "BV9KfzKwXPp9hQZEyhoVm9STbDy7gCGCmKcKpCDr8jXA",
+  "metadata": {
+    "name": "intents",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "bump_gas",
+      "docs": [
+        "Re-sign the same payout at the same nonce with a higher gas price. Only",
+        "one transaction per nonce can land, so this needs no Base read. Once all",
+        "four slots are taken, pass one of the intent's SigRequests as a remaining",
+        "account to reuse its slot: anyone may if it expired unsigned (it can never",
+        "land), and the admin may for any slot."
+      ],
+      "discriminator": [
+        44,
+        242,
+        215,
+        44,
+        96,
+        38,
+        240,
+        203
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "docs": [
+            "The filling solver, the admin, or anyone once `filled_at + 60` has passed. Pays",
+            "the new SigRequest rent."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "solver",
+          "docs": [
+            "The filling solver's ledger, debited for the extra gas."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  108,
+                  118,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "intent.solver",
+                "account": "Intent"
+              }
+            ]
+          }
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "intent",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "intent.user",
+                "account": "Intent"
+              },
+              {
+                "kind": "account",
+                "path": "intent.intent_id",
+                "account": "Intent"
+              }
+            ]
+          }
+        },
+        {
+          "name": "committee",
+          "address": "9mX3oHUmsrYvzXjCo35HhfXufrGZT3hjsLoC74xbA6SS"
+        },
+        {
+          "name": "sig_request",
+          "writable": true
+        },
+        {
+          "name": "pool",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "soda_program",
+          "address": "CPAEfBXpMMsUrjLNhDYxaCH79DYvFHJFC27fttnxAL1J"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "new_gas_price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "bump_withdrawal_gas",
+      "docs": [
+        "bump_gas for a withdrawal payout: same rules, keyed by its `Withdrawal`."
+      ],
+      "discriminator": [
+        134,
+        189,
+        2,
+        124,
+        133,
+        157,
+        76,
+        211
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "docs": [
+            "The withdrawing solver, the admin, or anyone once `created_at + 60` has",
+            "passed. Pays the new SigRequest rent."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "solver",
+          "docs": [
+            "The withdrawing solver's ledger, debited for the extra gas."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  108,
+                  118,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "withdrawal.solver",
+                "account": "Withdrawal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "withdrawal",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  116,
+                  104,
+                  100,
+                  114,
+                  97,
+                  119,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "withdrawal.base_nonce",
+                "account": "Withdrawal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "committee",
+          "address": "9mX3oHUmsrYvzXjCo35HhfXufrGZT3hjsLoC74xbA6SS"
+        },
+        {
+          "name": "sig_request",
+          "writable": true
+        },
+        {
+          "name": "pool",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "soda_program",
+          "address": "CPAEfBXpMMsUrjLNhDYxaCH79DYvFHJFC27fttnxAL1J"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "new_gas_price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "cancel_intent",
+      "docs": [
+        "Maker cancel: any time before a fill. The account stays so the page can",
+        "show the refund; `close_intent` reclaims its rent."
+      ],
+      "discriminator": [
+        67,
+        73,
+        238,
+        244,
+        208,
+        89,
+        225,
+        59
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "intent"
+          ]
+        },
+        {
+          "name": "intent",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              },
+              {
+                "kind": "account",
+                "path": "intent.intent_id",
+                "account": "Intent"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_intent",
+      "docs": [
+        "The user closes a Cancelled intent. A Filled one holds the only state",
+        "that can re-sign its payout (`bump_gas`), so only the admin closes it,",
+        "after checking on Basescan that the payout landed. Rent goes to the user."
+      ],
+      "discriminator": [
+        112,
+        245,
+        154,
+        249,
+        57,
+        126,
+        54,
+        122
+      ],
+      "accounts": [
+        {
+          "name": "closer",
+          "docs": [
+            "The intent's user (Cancelled) or the admin (Filled)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "relations": [
+            "intent"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "intent",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              },
+              {
+                "kind": "account",
+                "path": "intent.intent_id",
+                "account": "Intent"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "credit_solver",
+      "docs": [
+        "Trusted: the admin has checked the solver's deposit `tx_hash` to",
+        "`pool_evm_addr` on Basescan. Writes the same `Credit` as",
+        "`credit_solver_from_claim`, so a deposit credits once by either path.",
+        "An amount of 0 only marks a deposit credited before the marker existed."
+      ],
+      "discriminator": [
+        118,
+        200,
+        61,
+        17,
+        39,
+        185,
+        58,
+        169
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "docs": [
+            "Pays the Credit rent."
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "solver",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  108,
+                  118,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "solver.authority",
+                "account": "Solver"
+              }
+            ]
+          }
+        },
+        {
+          "name": "credit",
+          "docs": [
+            "Shared with credit_solver_from_claim: a deposit credits once either way."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  100,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "tx_hash"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount_wei",
+          "type": "u128"
+        },
+        {
+          "name": "tx_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "credit_solver_from_claim",
+      "docs": [
+        "Phase 2: credit a deposit that soda_witness recorded. This program",
+        "judges the claim's facts itself. Anyone may submit once the witness takes",
+        "reports only from the production forwarder with a pinned workflow owner;",
+        "until then anyone can forge a claim, so the admin must co-sign. The",
+        "`Credit` PDA is keyed by the deposit's tx hash, so a deposit credits once",
+        "even when two solvers share a `deposit_from` and each opened a claim."
+      ],
+      "discriminator": [
+        100,
+        64,
+        112,
+        196,
+        232,
+        186,
+        234,
+        250
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Anyone; pays the Credit rent."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "admin",
+          "docs": [
+            "config.admin; must sign unless the witness is trusted (see the handler)."
+          ],
+          "signer": true,
+          "optional": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "solver",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  108,
+                  118,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "solver.authority",
+                "account": "Solver"
+              }
+            ]
+          }
+        },
+        {
+          "name": "claim"
+        },
+        {
+          "name": "witness_config"
+        },
+        {
+          "name": "credit",
+          "docs": [
+            "Exists once per deposit; a second credit fails here (account in use)."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  100,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "tx_hash"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "tx_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "fill",
+      "discriminator": [
+        168,
+        96,
+        183,
+        163,
+        92,
+        10,
+        40,
+        160
+      ],
+      "accounts": [
+        {
+          "name": "solver_authority",
+          "docs": [
+            "Receives the escrowed SOL and pays the SigRequest rent."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "solver",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  108,
+                  118,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "solver_authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "intent",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "intent.user",
+                "account": "Intent"
+              },
+              {
+                "kind": "account",
+                "path": "intent.intent_id",
+                "account": "Intent"
+              }
+            ]
+          }
+        },
+        {
+          "name": "committee",
+          "address": "9mX3oHUmsrYvzXjCo35HhfXufrGZT3hjsLoC74xbA6SS"
+        },
+        {
+          "name": "sig_request",
+          "writable": true
+        },
+        {
+          "name": "pool",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "soda_program",
+          "address": "CPAEfBXpMMsUrjLNhDYxaCH79DYvFHJFC27fttnxAL1J"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "expected_nonce",
+          "type": "u64"
+        },
+        {
+          "name": "out_wei",
+          "type": "u128"
+        },
+        {
+          "name": "gas_price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "init_config",
+      "discriminator": [
+        23,
+        235,
+        115,
+        232,
+        168,
+        96,
+        1,
+        231
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pool",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "pool_evm_addr",
+          "type": {
+            "array": [
+              "u8",
+              20
+            ]
+          }
+        },
+        {
+          "name": "max_gas_price",
+          "type": "u64"
+        },
+        {
+          "name": "l1_fee_buffer_wei",
+          "type": "u64"
+        },
+        {
+          "name": "min_gas_price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "open_intent",
+      "discriminator": [
+        83,
+        191,
+        214,
+        191,
+        204,
+        246,
+        15,
+        151
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "intent",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              },
+              {
+                "kind": "arg",
+                "path": "intent_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "intent_id",
+          "type": "u64"
+        },
+        {
+          "name": "in_lamports",
+          "type": "u64"
+        },
+        {
+          "name": "recipient",
+          "type": {
+            "array": [
+              "u8",
+              20
+            ]
+          }
+        },
+        {
+          "name": "start_out_wei",
+          "type": "u128"
+        },
+        {
+          "name": "min_out_wei",
+          "type": "u128"
+        },
+        {
+          "name": "auction_duration",
+          "type": "u32"
+        },
+        {
+          "name": "expires_at",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "register_solver",
+      "docs": [
+        "`deposit_sig` is an EIP-191 personal_sign by `deposit_from` over",
+        "`deposit_proof_message(authority)`. Credits trust `deposit_from`, so",
+        "nobody may claim an address they cannot sign for."
+      ],
+      "discriminator": [
+        143,
+        125,
+        182,
+        215,
+        172,
+        69,
+        137,
+        105
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "solver",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  108,
+                  118,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "payout_addr",
+          "type": {
+            "array": [
+              "u8",
+              20
+            ]
+          }
+        },
+        {
+          "name": "deposit_from",
+          "type": {
+            "array": [
+              "u8",
+              20
+            ]
+          }
+        },
+        {
+          "name": "deposit_sig",
+          "type": {
+            "array": [
+              "u8",
+              65
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_max_gas_price",
+      "docs": [
+        "Raising the cap is the escape hatch when a payout is stuck at it."
+      ],
+      "discriminator": [
+        210,
+        226,
+        131,
+        136,
+        185,
+        214,
+        119,
+        180
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "max_gas_price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "set_min_gas_price",
+      "docs": [
+        "Floor for every signed payout; keep it at or above Base's basefee."
+      ],
+      "discriminator": [
+        100,
+        169,
+        38,
+        15,
+        250,
+        25,
+        62,
+        63
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "min_gas_price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "set_paused",
+      "discriminator": [
+        91,
+        60,
+        125,
+        192,
+        176,
+        225,
+        166,
+        218
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "paused",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "solver_withdraw",
+      "docs": [
+        "Pay part of a solver's inventory out of the pool to its `payout_addr`.",
+        "The withdrawal's own gas also comes out of the ledger."
+      ],
+      "discriminator": [
+        137,
+        232,
+        222,
+        145,
+        88,
+        159,
+        43,
+        238
+      ],
+      "accounts": [
+        {
+          "name": "solver_authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "solver",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  111,
+                  108,
+                  118,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "solver_authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "withdrawal",
+          "docs": [
+            "Keyed by the nonce the handler checks equals next_nonce."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  116,
+                  104,
+                  100,
+                  114,
+                  97,
+                  119,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "expected_nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "committee",
+          "address": "9mX3oHUmsrYvzXjCo35HhfXufrGZT3hjsLoC74xbA6SS"
+        },
+        {
+          "name": "sig_request",
+          "writable": true
+        },
+        {
+          "name": "pool",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "soda_program",
+          "address": "CPAEfBXpMMsUrjLNhDYxaCH79DYvFHJFC27fttnxAL1J"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "expected_nonce",
+          "type": "u64"
+        },
+        {
+          "name": "amount_wei",
+          "type": "u128"
+        },
+        {
+          "name": "gas_price",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Config",
+      "discriminator": [
+        155,
+        12,
+        170,
+        224,
+        30,
+        250,
+        204,
+        130
+      ]
+    },
+    {
+      "name": "Credit",
+      "discriminator": [
+        6,
+        79,
+        161,
+        136,
+        156,
+        172,
+        190,
+        149
+      ]
+    },
+    {
+      "name": "Intent",
+      "discriminator": [
+        247,
+        162,
+        35,
+        165,
+        254,
+        111,
+        129,
+        109
+      ]
+    },
+    {
+      "name": "Solver",
+      "discriminator": [
+        174,
+        70,
+        187,
+        101,
+        208,
+        40,
+        95,
+        77
+      ]
+    },
+    {
+      "name": "Withdrawal",
+      "discriminator": [
+        10,
+        45,
+        211,
+        182,
+        129,
+        235,
+        90,
+        82
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "EthTxRequested",
+      "discriminator": [
+        177,
+        159,
+        87,
+        157,
+        4,
+        162,
+        34,
+        5
+      ]
+    },
+    {
+      "name": "GasBumped",
+      "discriminator": [
+        199,
+        99,
+        30,
+        180,
+        17,
+        124,
+        195,
+        205
+      ]
+    },
+    {
+      "name": "IntentCancelled",
+      "discriminator": [
+        39,
+        174,
+        74,
+        165,
+        39,
+        101,
+        119,
+        29
+      ]
+    },
+    {
+      "name": "IntentFilled",
+      "discriminator": [
+        243,
+        107,
+        254,
+        230,
+        192,
+        28,
+        244,
+        72
+      ]
+    },
+    {
+      "name": "IntentOpened",
+      "discriminator": [
+        138,
+        14,
+        44,
+        106,
+        146,
+        137,
+        132,
+        137
+      ]
+    },
+    {
+      "name": "SolverCredited",
+      "discriminator": [
+        160,
+        155,
+        28,
+        122,
+        251,
+        172,
+        52,
+        9
+      ]
+    },
+    {
+      "name": "SolverCreditedFromClaim",
+      "discriminator": [
+        243,
+        202,
+        63,
+        131,
+        230,
+        129,
+        122,
+        235
+      ]
+    },
+    {
+      "name": "SolverWithdrew",
+      "discriminator": [
+        254,
+        73,
+        198,
+        27,
+        84,
+        161,
+        46,
+        165
+      ]
+    },
+    {
+      "name": "WithdrawalGasBumped",
+      "discriminator": [
+        216,
+        206,
+        70,
+        240,
+        241,
+        52,
+        129,
+        77
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Paused",
+      "msg": "Program is paused"
+    },
+    {
+      "code": 6001,
+      "name": "IntentNotOpen",
+      "msg": "Intent is not in the required status"
+    },
+    {
+      "code": 6002,
+      "name": "IntentExpired",
+      "msg": "Intent has expired"
+    },
+    {
+      "code": 6003,
+      "name": "BelowRequiredOut",
+      "msg": "out_wei is below the auction's required output"
+    },
+    {
+      "code": 6004,
+      "name": "GasPriceTooHigh",
+      "msg": "Gas price is above max_gas_price"
+    },
+    {
+      "code": 6005,
+      "name": "InsufficientSolverBalance",
+      "msg": "Solver balance does not cover the payout"
+    },
+    {
+      "code": 6006,
+      "name": "NonceMoved",
+      "msg": "Pool nonce moved; re-read config.next_nonce"
+    },
+    {
+      "code": 6007,
+      "name": "NotFillingSolver",
+      "msg": "Only the filling solver may bump before filled_at + 60"
+    },
+    {
+      "code": 6008,
+      "name": "BumpTooSmall",
+      "msg": "New gas price must be at least 110% of the old one"
+    },
+    {
+      "code": 6009,
+      "name": "TooManyBumps",
+      "msg": "No sig_request slots left"
+    },
+    {
+      "code": 6010,
+      "name": "BadAuctionParams",
+      "msg": "Bad auction parameters"
+    },
+    {
+      "code": 6011,
+      "name": "NotClosable",
+      "msg": "Intent cannot be closed yet"
+    },
+    {
+      "code": 6012,
+      "name": "MathOverflow",
+      "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6013,
+      "name": "GasPriceTooLow",
+      "msg": "Gas price is below min_gas_price"
+    },
+    {
+      "code": 6014,
+      "name": "ZeroAmount",
+      "msg": "Amount must be above zero"
+    },
+    {
+      "code": 6015,
+      "name": "BadGasConfig",
+      "msg": "Need 0 < min_gas_price <= max_gas_price"
+    },
+    {
+      "code": 6016,
+      "name": "ClaimNotFromWitness",
+      "msg": "Claim is not owned by config.witness_program"
+    },
+    {
+      "code": 6017,
+      "name": "InvalidClaim",
+      "msg": "Account is not a soda_witness Claim"
+    },
+    {
+      "code": 6018,
+      "name": "ClaimTxHashMismatch",
+      "msg": "Claim tx_hash does not match the instruction's tx_hash"
+    },
+    {
+      "code": 6019,
+      "name": "ClaimNotRecorded",
+      "msg": "Claim is not Recorded"
+    },
+    {
+      "code": 6020,
+      "name": "DepositReverted",
+      "msg": "Recorded deposit reverted on Base"
+    },
+    {
+      "code": 6021,
+      "name": "ClaimWrongChain",
+      "msg": "Claim is not for Base Sepolia (84532)"
+    },
+    {
+      "code": 6022,
+      "name": "DepositNotToPool",
+      "msg": "Deposit did not go to pool_evm_addr"
+    },
+    {
+      "code": 6023,
+      "name": "DepositNotFromSolver",
+      "msg": "Deposit was not sent from the solver's deposit_from"
+    },
+    {
+      "code": 6024,
+      "name": "ClaimNotBySolver",
+      "msg": "Claim requester is not the solver's authority"
+    },
+    {
+      "code": 6025,
+      "name": "UntrustedWitness",
+      "msg": "Witness accepts unauthenticated reports; the admin must co-sign"
+    },
+    {
+      "code": 6026,
+      "name": "DepositFromNotProven",
+      "msg": "deposit_sig is not deposit_from's signature over the register message"
+    }
+  ],
+  "types": [
+    {
+      "name": "Config",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool_bump",
+            "type": "u8"
+          },
+          {
+            "name": "pool_evm_addr",
+            "docs": [
+              "Display only; derived off-chain at init and checked in tests."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                20
+              ]
+            }
+          },
+          {
+            "name": "next_nonce",
+            "type": "u64"
+          },
+          {
+            "name": "max_gas_price",
+            "type": "u64"
+          },
+          {
+            "name": "l1_fee_buffer_wei",
+            "type": "u64"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "witness_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "min_gas_price",
+            "docs": [
+              "Floor for fill, solver_withdraw and bump prices."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Credit",
+      "docs": [
+        "Marks a Base deposit as credited, by either credit path. Seeds [\"credit\", tx_hash]."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "solver",
+            "docs": [
+              "The credited solver's authority."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "claim",
+            "docs": [
+              "The soda_witness claim that proved the deposit; default for an admin credit."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "tx_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "amount_wei",
+            "type": "u128"
+          },
+          {
+            "name": "credited_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EthTxRequested",
+      "docs": [
+        "Exact name and field order of frontier eth_demo's event: the relayer",
+        "matches on its discriminator and broadcasts the signed payout."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "sig_request",
+            "type": "pubkey"
+          },
+          {
+            "name": "chain_id",
+            "type": "u64"
+          },
+          {
+            "name": "unsigned_rlp",
+            "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GasBumped",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "intent",
+            "type": "pubkey"
+          },
+          {
+            "name": "caller",
+            "type": "pubkey"
+          },
+          {
+            "name": "solver",
+            "docs": [
+              "Filling solver authority, whose ledger paid the extra gas."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "base_nonce",
+            "type": "u64"
+          },
+          {
+            "name": "old_gas_price",
+            "type": "u64"
+          },
+          {
+            "name": "new_gas_price",
+            "type": "u64"
+          },
+          {
+            "name": "sig_request",
+            "type": "pubkey"
+          },
+          {
+            "name": "sig_request_count",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Intent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "intent_id",
+            "type": "u64"
+          },
+          {
+            "name": "in_lamports",
+            "docs": [
+              "Held as lamports in this account above rent while Open."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "recipient",
+            "type": {
+              "array": [
+                "u8",
+                20
+              ]
+            }
+          },
+          {
+            "name": "start_out_wei",
+            "type": "u128"
+          },
+          {
+            "name": "min_out_wei",
+            "type": "u128"
+          },
+          {
+            "name": "auction_start",
+            "type": "i64"
+          },
+          {
+            "name": "auction_duration",
+            "type": "u32"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "status",
+            "docs": [
+              "STATUS_OPEN, STATUS_FILLED or STATUS_CANCELLED."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "solver",
+            "docs": [
+              "The filling solver's authority (wallet), not its `Solver` PDA."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "out_wei",
+            "type": "u128"
+          },
+          {
+            "name": "base_nonce",
+            "type": "u64"
+          },
+          {
+            "name": "gas_price",
+            "type": "u64"
+          },
+          {
+            "name": "filled_at",
+            "type": "i64"
+          },
+          {
+            "name": "sig_requests",
+            "docs": [
+              "The original payout plus up to 3 gas bumps; any one of them may land."
+            ],
+            "type": {
+              "array": [
+                "pubkey",
+                4
+              ]
+            }
+          },
+          {
+            "name": "sig_request_count",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "IntentCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "intent",
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "refunded_lamports",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "IntentFilled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "intent",
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "solver",
+            "docs": [
+              "Solver authority (wallet)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "in_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "out_wei",
+            "type": "u128"
+          },
+          {
+            "name": "base_nonce",
+            "type": "u64"
+          },
+          {
+            "name": "gas_price",
+            "type": "u64"
+          },
+          {
+            "name": "sig_request",
+            "type": "pubkey"
+          },
+          {
+            "name": "filled_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "IntentOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "intent",
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "intent_id",
+            "type": "u64"
+          },
+          {
+            "name": "in_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "recipient",
+            "type": {
+              "array": [
+                "u8",
+                20
+              ]
+            }
+          },
+          {
+            "name": "start_out_wei",
+            "type": "u128"
+          },
+          {
+            "name": "min_out_wei",
+            "type": "u128"
+          },
+          {
+            "name": "auction_start",
+            "type": "i64"
+          },
+          {
+            "name": "auction_duration",
+            "type": "u32"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Solver",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "payout_addr",
+            "type": {
+              "array": [
+                "u8",
+                20
+              ]
+            }
+          },
+          {
+            "name": "deposit_from",
+            "type": {
+              "array": [
+                "u8",
+                20
+              ]
+            }
+          },
+          {
+            "name": "balance_wei",
+            "type": "u128"
+          },
+          {
+            "name": "fills",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SolverCredited",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "solver",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount_wei",
+            "type": "u128"
+          },
+          {
+            "name": "balance_wei",
+            "type": "u128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SolverCreditedFromClaim",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "solver",
+            "docs": [
+              "Solver authority (wallet)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "claim",
+            "type": "pubkey"
+          },
+          {
+            "name": "tx_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "amount_wei",
+            "type": "u128"
+          },
+          {
+            "name": "balance_wei",
+            "type": "u128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SolverWithdrew",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "solver",
+            "type": "pubkey"
+          },
+          {
+            "name": "payout_addr",
+            "type": {
+              "array": [
+                "u8",
+                20
+              ]
+            }
+          },
+          {
+            "name": "amount_wei",
+            "type": "u128"
+          },
+          {
+            "name": "base_nonce",
+            "type": "u64"
+          },
+          {
+            "name": "gas_price",
+            "type": "u64"
+          },
+          {
+            "name": "sig_request",
+            "type": "pubkey"
+          },
+          {
+            "name": "balance_wei",
+            "type": "u128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Withdrawal",
+      "docs": [
+        "A solver_withdraw payout, kept so it can be bumped like a fill."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "solver",
+            "docs": [
+              "The withdrawing solver's authority, whose ledger pays bumps."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "payout_addr",
+            "type": {
+              "array": [
+                "u8",
+                20
+              ]
+            }
+          },
+          {
+            "name": "amount_wei",
+            "type": "u128"
+          },
+          {
+            "name": "base_nonce",
+            "type": "u64"
+          },
+          {
+            "name": "gas_price",
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "sig_requests",
+            "type": {
+              "array": [
+                "pubkey",
+                4
+              ]
+            }
+          },
+          {
+            "name": "sig_request_count",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WithdrawalGasBumped",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "withdrawal",
+            "type": "pubkey"
+          },
+          {
+            "name": "caller",
+            "type": "pubkey"
+          },
+          {
+            "name": "solver",
+            "docs": [
+              "Withdrawing solver authority, whose ledger paid the extra gas."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "base_nonce",
+            "type": "u64"
+          },
+          {
+            "name": "old_gas_price",
+            "type": "u64"
+          },
+          {
+            "name": "new_gas_price",
+            "type": "u64"
+          },
+          {
+            "name": "sig_request",
+            "type": "pubkey"
+          },
+          {
+            "name": "sig_request_count",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}
