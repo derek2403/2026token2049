@@ -1,19 +1,35 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
+import {
+  ComputeBudgetProgram,
+  Ed25519Program,
+  Keypair,
+  PublicKey,
+  SystemProgram,
+  SYSVAR_INSTRUCTIONS_PUBKEY,
+} from "@solana/web3.js";
+import { BN, BorshCoder, type Idl } from "@coral-xyz/anchor";
+import { ed25519 } from "@noble/curves/ed25519";
 import { sha256 } from "@noble/hashes/sha2";
 import {
   COMMITTEE_PDA,
   DEFAULT_INTENTS_PROGRAM_ID,
+  INTENTS_IDL,
   SODA_PROGRAM_ID,
   configPda,
   creditPda,
+  intentPda,
   payoutSigRequest,
   poolPda,
+  renderIntentMessage,
   solverPda,
+  vaultPda,
+  verifyIntentSignature,
   withdrawalPda,
 } from "../../../lib/intents";
 import {
+  FILL_COMPUTE_UNITS,
+  buildExecuteTx,
   bumpGasIx,
   bumpWithdrawalGasIx,
   closeIntentIx,
@@ -21,11 +37,14 @@ import {
   creditSolverFromClaimIx,
   creditSolverIx,
   decodeClockUnixTimestamp,
+  depositSolIx,
+  executeSignedIntentIx,
   fillIx,
   intentsErrorName,
   intentsProgram,
   registerSolverIx,
   solverWithdrawIx,
+  withdrawSolIx,
 } from "./chain";
 
 const PID = new PublicKey(DEFAULT_INTENTS_PROGRAM_ID);
@@ -203,4 +222,119 @@ test("registerSolverIx carries the 65-byte deposit proof", async () => {
   const ix = await registerSolverIx(program, authority, payout, from, sig);
   assert.deepEqual(Buffer.from(ix.data), Buffer.concat([disc("register_solver"), payout, from, sig]));
   assert.throws(() => registerSolverIx(program, authority, payout, from, new Uint8Array(64)), /65 bytes/);
+});
+
+const keyRows = (ix: { keys: { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[] }) =>
+  ix.keys.map((k) => [k.pubkey.toBase58(), k.isSigner, k.isWritable]);
+
+test("depositSolIx and withdrawSolIx: owner signs, vault PDA ['vault', owner]", async () => {
+  const owner = Keypair.generate().publicKey;
+  const vault = vaultPda(owner, PID)[0].toBase58();
+  const amount = Buffer.alloc(8);
+  amount.writeBigUInt64LE(250_000_000n);
+  const d = await depositSolIx(program, owner, 250_000_000n);
+  assert.deepEqual(Buffer.from(d.data), Buffer.concat([disc("deposit_sol"), amount]));
+  assert.deepEqual(keyRows(d), [
+    [owner.toBase58(), true, true],
+    [configPda(PID)[0].toBase58(), false, false],
+    [vault, false, true],
+    [SystemProgram.programId.toBase58(), false, false],
+  ]);
+  const w = await withdrawSolIx(program, owner, 250_000_000n);
+  assert.deepEqual(Buffer.from(w.data), Buffer.concat([disc("withdraw_sol"), amount]));
+  assert.deepEqual(keyRows(w), [
+    [owner.toBase58(), true, true],
+    [vault, false, true],
+  ]);
+});
+
+function signedArgs() {
+  const user = Keypair.generate();
+  const a = {
+    user: user.publicKey,
+    nonce: 0xdead_beef_cafe_f00dn,
+    deadline: 1_759_830_120n,
+    sellLamports: 100_000_000n,
+    minOutWei: 2_138_000_000_000_000n,
+    recipient: Uint8Array.from({ length: 20 }, (_, i) => 0xd0 + i),
+    outWei: 2_140_000_000_000_000n,
+    expectedNonce: 5n,
+    gasPrice: 1_200_000n,
+  };
+  const signature = ed25519.sign(renderIntentMessage(a, PID), user.secretKey.slice(0, 32));
+  return { user, a, signature };
+}
+
+test("executeSignedIntentIx: args encode as SignedIntentArgs, accounts in IDL order", async () => {
+  const solverAuth = Keypair.generate().publicKey;
+  const { a } = signedArgs();
+  const { ix, intent, sigRequest } = executeSignedIntentIx(program, solverAuth, { ...a, ed25519IxIndex: 1 });
+  const built = await ix;
+
+  const want = new BorshCoder(INTENTS_IDL as Idl).instruction.encode("execute_signed_intent", {
+    args: {
+      user: a.user,
+      nonce: new BN(a.nonce.toString()),
+      deadline: new BN(a.deadline.toString()),
+      sell_lamports: new BN(a.sellLamports.toString()),
+      min_out_wei: new BN(a.minOutWei.toString()),
+      recipient: [...a.recipient],
+      out_wei: new BN(a.outWei.toString()),
+      expected_nonce: new BN(a.expectedNonce.toString()),
+      gas_price: new BN(a.gasPrice.toString()),
+      ed25519_ix_index: 1,
+    },
+  });
+  assert.deepEqual(Buffer.from(built.data), Buffer.from(want));
+  assert.deepEqual(Buffer.from(built.data).subarray(0, 8), disc("execute_signed_intent"));
+  assert.equal(built.data.length, 8 + 32 + 8 + 8 + 8 + 16 + 20 + 16 + 8 + 8 + 1);
+  assert.equal(built.data[built.data.length - 1], 1);
+
+  assert.ok(intent.equals(intentPda(a.user, a.nonce, PID)[0]));
+  const expected = payoutSigRequest({ recipient: a.recipient, outWei: a.outWei, baseNonce: 5n, gasPrice: a.gasPrice }, PID);
+  assert.ok(sigRequest.equals(expected.sigRequest));
+  assert.deepEqual(keyRows(built), [
+    [solverAuth.toBase58(), true, true],
+    [solverPda(solverAuth, PID)[0].toBase58(), false, true],
+    [configPda(PID)[0].toBase58(), false, true],
+    [vaultPda(a.user, PID)[0].toBase58(), false, true],
+    [intent.toBase58(), false, true],
+    [COMMITTEE_PDA.toBase58(), false, false],
+    [sigRequest.toBase58(), false, true],
+    [poolPda(PID)[0].toBase58(), false, false],
+    [SODA_PROGRAM_ID.toBase58(), false, false],
+    [SYSVAR_INSTRUCTIONS_PUBKEY.toBase58(), false, false],
+    [SystemProgram.programId.toBase58(), false, false],
+  ]);
+});
+
+test("buildExecuteTx: [compute budget, Ed25519, execute] with ed25519_ix_index pointing at the Ed25519 instruction", async () => {
+  const solverAuth = Keypair.generate().publicKey;
+  const { a, signature } = signedArgs();
+  const tx = await buildExecuteTx(program, solverAuth, a, signature);
+  assert.equal(tx.ixs.length, 3);
+  assert.ok(tx.ixs[0].programId.equals(ComputeBudgetProgram.programId));
+  assert.ok(tx.ixs[1].programId.equals(Ed25519Program.programId));
+  assert.ok(tx.ixs[2].programId.equals(PID));
+  assert.equal(tx.ixs[0].data.readUInt32LE(1), FILL_COMPUTE_UNITS);
+  assert.equal(tx.ixs[2].data[tx.ixs[2].data.length - 1], 1);
+  assert.ok(tx.intent.equals(intentPda(a.user, a.nonce, PID)[0]));
+  assert.ok(verifyIntentSignature(tx.message, signature, a.user));
+
+  // The Ed25519 entry is self-contained (all instruction indices u16::MAX) and carries pk, sig, message.
+  const d = tx.ixs[1].data;
+  assert.equal(d[0], 1);
+  const u16 = (i: number) => d.readUInt16LE(2 + i * 2);
+  assert.deepEqual([u16(1), u16(3), u16(6)], [0xffff, 0xffff, 0xffff]);
+  assert.deepEqual(d.subarray(u16(2), u16(2) + 32), Buffer.from(a.user.toBytes()));
+  assert.deepEqual(d.subarray(u16(0), u16(0) + 64), Buffer.from(signature));
+  assert.deepEqual(d.subarray(u16(4), u16(4) + u16(5)), Buffer.from(renderIntentMessage(a, PID)));
+
+  // A priority fee instruction shifts the Ed25519 instruction, and the index follows.
+  const pri = await buildExecuteTx(program, solverAuth, a, signature, { priorityMicroLamports: 1_000 });
+  assert.equal(pri.ixs.length, 4);
+  assert.ok(pri.ixs[2].programId.equals(Ed25519Program.programId));
+  assert.equal(pri.ixs[3].data[pri.ixs[3].data.length - 1], 2);
+
+  await assert.rejects(buildExecuteTx(program, solverAuth, a, signature.slice(1)), /64 bytes/);
 });
