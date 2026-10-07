@@ -6,10 +6,12 @@ import { AnchorProvider, BN, Program, Wallet, type Idl } from "@coral-xyz/anchor
 import {
   ComputeBudgetProgram,
   Connection,
+  Ed25519Program,
   Keypair,
   PublicKey,
   SystemProgram,
   SYSVAR_CLOCK_PUBKEY,
+  SYSVAR_INSTRUCTIONS_PUBKEY,
   Transaction,
   type TransactionInstruction,
 } from "@solana/web3.js";
@@ -22,10 +24,13 @@ import {
   intentPda,
   payoutSigRequest,
   poolPda,
+  renderIntentMessage,
   solverPda,
+  vaultPda,
   withdrawalPda,
   witnessConfigPda,
   type IntentAccount,
+  type IntentMessageFields,
   type WithdrawalAccount,
 } from "../../../lib/intents";
 
@@ -443,4 +448,104 @@ export function solverWithdrawIx(
     })
     .instruction();
   return { ix, sigRequest, unsignedRlp };
+}
+
+// ---------------------------------------------------------------- RFQ (signed intents)
+
+/** deposit_sol: creates the owner's UserVault on first use. Refused while paused. */
+export function depositSolIx(program: Program, owner: PublicKey, amount: bigint): Ix {
+  return program.methods
+    .depositSol(bn(amount))
+    .accountsStrict({
+      owner,
+      config: configPda(program.programId)[0],
+      userVault: vaultPda(owner, program.programId)[0],
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
+/** withdraw_sol: works while paused, so users can always exit. */
+export function withdrawSolIx(program: Program, owner: PublicKey, amount: bigint): Ix {
+  return program.methods
+    .withdrawSol(bn(amount))
+    .accountsStrict({ owner, userVault: vaultPda(owner, program.programId)[0] })
+    .instruction();
+}
+
+export type SignedIntentIxArgs = IntentMessageFields & {
+  outWei: bigint;
+  expectedNonce: bigint;
+  gasPrice: bigint;
+  /** Position of the Ed25519 instruction in the transaction. */
+  ed25519IxIndex: number;
+};
+
+/** execute_signed_intent: the solver signs and pays; the Intent PDA is ["intent", user, nonce]. */
+export function executeSignedIntentIx(
+  program: Program,
+  solverAuthority: PublicKey,
+  a: SignedIntentIxArgs,
+): { ix: Ix; intent: PublicKey; sigRequest: PublicKey; unsignedRlp: Uint8Array } {
+  const { sigRequest, unsignedRlp } = payoutSigRequest(
+    { recipient: a.recipient, outWei: a.outWei, baseNonce: a.expectedNonce, gasPrice: a.gasPrice },
+    program.programId,
+  );
+  const [intent] = intentPda(a.user, a.nonce, program.programId);
+  const ix = program.methods
+    .executeSignedIntent({
+      user: a.user,
+      nonce: bn(a.nonce),
+      deadline: bn(a.deadline),
+      sellLamports: bn(a.sellLamports),
+      minOutWei: bn(a.minOutWei),
+      recipient: arr20(a.recipient),
+      outWei: bn(a.outWei),
+      expectedNonce: bn(a.expectedNonce),
+      gasPrice: bn(a.gasPrice),
+      ed25519IxIndex: a.ed25519IxIndex,
+    })
+    .accountsStrict({
+      solverAuthority,
+      solver: solverPda(solverAuthority, program.programId)[0],
+      config: configPda(program.programId)[0],
+      userVault: vaultPda(a.user, program.programId)[0],
+      intent,
+      committee: COMMITTEE_PDA,
+      sigRequest,
+      pool: poolPda(program.programId)[0],
+      sodaProgram: SODA_PROGRAM_ID,
+      instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+  return { ix, intent, sigRequest, unsignedRlp };
+}
+
+/**
+ * The whole settlement transaction's instructions, to send without extra
+ * compute budget instructions: [ComputeBudget limit, (price), Ed25519 verify
+ * of the user's signature over the rendered message, execute_signed_intent].
+ * ed25519_ix_index follows the Ed25519 instruction's position.
+ */
+export async function buildExecuteTx(
+  program: Program,
+  solverAuthority: PublicKey,
+  a: Omit<SignedIntentIxArgs, "ed25519IxIndex">,
+  signature: Uint8Array,
+  opts: { computeUnits?: number; priorityMicroLamports?: number } = {},
+): Promise<{ ixs: TransactionInstruction[]; intent: PublicKey; sigRequest: PublicKey; unsignedRlp: Uint8Array; message: Uint8Array }> {
+  if (signature.length !== 64) throw new Error(`signature must be 64 bytes, got ${signature.length}`);
+  const ixs: TransactionInstruction[] = [
+    ComputeBudgetProgram.setComputeUnitLimit({ units: opts.computeUnits ?? FILL_COMPUTE_UNITS }),
+  ];
+  if (opts.priorityMicroLamports) {
+    ixs.push(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: opts.priorityMicroLamports }));
+  }
+  const message = renderIntentMessage(a, program.programId);
+  const ed25519IxIndex = ixs.length;
+  ixs.push(Ed25519Program.createInstructionWithPublicKey({ publicKey: a.user.toBytes(), message, signature }));
+  const { ix, intent, sigRequest, unsignedRlp } = executeSignedIntentIx(program, solverAuthority, { ...a, ed25519IxIndex });
+  ixs.push(await ix);
+  return { ixs, intent, sigRequest, unsignedRlp, message };
 }
