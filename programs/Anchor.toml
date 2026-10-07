@@ -9,10 +9,12 @@ skip-lint = false
 [programs.localnet]
 intents = "BV9KfzKwXPp9hQZEyhoVm9STbDy7gCGCmKcKpCDr8jXA"
 soda_witness = "5v97wLYgMzyfQfpZWGQ6uPXTHh4JsJitUXPReYy2uuTp"
+soda_cre_signer = "2cgtuK2Y9BQ8uMbVpYwM9FZ7TVkSqu9xegNTyBp3taxM"
 
 [programs.devnet]
 intents = "BV9KfzKwXPp9hQZEyhoVm9STbDy7gCGCmKcKpCDr8jXA"
 soda_witness = "5v97wLYgMzyfQfpZWGQ6uPXTHh4JsJitUXPReYy2uuTp"
+soda_cre_signer = "2cgtuK2Y9BQ8uMbVpYwM9FZ7TVkSqu9xegNTyBp3taxM"
 
 [registry]
 url = "https://api.apr.dev"
