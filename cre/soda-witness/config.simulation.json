@@ -1,0 +1,9 @@
+{
+  "chainSelector": "16423721717087811551",
+  "receiverProgramId": "5v97wLYgMzyfQfpZWGQ6uPXTHh4JsJitUXPReYy2uuTp",
+  "forwarderProgramId": "7kuEAA3mSC1Tz8gQjnvH7bKFda9xSPRRin9SZbH49cNK",
+  "forwarderState": "5Tipz3yhTBdVsDbaBxZkrp7Gjf3brGq5SKkxReefPMP7",
+  "witnessConfig": "5Dxc9Y6sWUwvcLUhatWAHmBwVnKfUXPu5cuWccZZCNRY",
+  "chainId": 84532,
+  "minConfirmations": 3
+}
