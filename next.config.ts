@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Self-contained server for Dockerfile.web (.next/standalone/server.js).
+  output: "standalone",
   experimental: {
     agentFeedback: true,
   },
