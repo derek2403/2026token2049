@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type MouseEvent } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import {
   IntentStatus,
+  isRfqIntent,
   basescanTx,
   fetchIntentsByUser,
   solanaExplorerAddress,
@@ -12,7 +13,7 @@ import {
 } from "@/lib/intents";
 import type { PayoutResponse } from "@/app/lib/api-types";
 import { formatDateTime, formatEthAmount, formatSol } from "@/app/lib/format";
-import { EthMark, SolMark } from "./icons";
+import { EthMark, RefreshIcon, SolMark } from "./icons";
 import { StatusPill } from "./StatusPill";
 
 export function ActivityPanel({
@@ -33,6 +34,7 @@ export function ActivityPanel({
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const reload = useCallback(() => setTick((t) => t + 1), []);
+  const [today] = useState(() => Date.now());
 
   useEffect(() => {
     if (!publicKey) return;
@@ -55,45 +57,85 @@ export function ActivityPanel({
   const rows = publicKey && loaded?.owner === publicKey.toBase58() ? loaded.rows : null;
 
   return (
-    <section id="activity" className="w-full rounded-[28px] border border-line bg-card p-4 sm:p-5">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-semibold">Activity</h2>
-        {publicKey && (
-          <button onClick={reload} className="text-xs text-muted hover:text-fg">
-            Refresh
+    <section className="w-full">
+      {publicKey && (
+        <div className="mb-3 flex items-center justify-between text-sm text-muted">
+          <span>Intents on chain{rows ? ` · ${rows.length}` : ""}</span>
+          <button onClick={reload} className="flex items-center gap-1.5 hover:text-fg">
+            <RefreshIcon size={14} /> Refresh
           </button>
-        )}
-      </div>
-      {!publicKey && <p className="py-6 text-center text-sm text-muted">Connect a wallet to see your intents.</p>}
-      {publicKey && error && <p className="py-4 text-sm text-bad">Could not load intents: {error}</p>}
+        </div>
+      )}
+      {!publicKey && <p className="py-10 text-center text-sm text-muted">Connect a wallet to see your intents.</p>}
+      {publicKey && error && (
+        <div className="py-10 text-center text-sm">
+          <p className="text-fg">Loading error</p>
+          <p className="mt-1 text-muted">{error}</p>
+          <button onClick={reload} className="mt-3 text-accent hover:opacity-70">
+            Reload
+          </button>
+        </div>
+      )}
       {publicKey && !error && rows === null && (
-        <div className="space-y-2">
+        <div className="space-y-0.5">
           {[0, 1].map((k) => (
-            <div key={k} className="h-16 animate-pulse rounded-2xl bg-panel" />
+            <div key={k} className="h-[88px] animate-pulse bg-panel" />
           ))}
         </div>
       )}
       {rows && rows.length === 0 && (
-        <p className="py-6 text-center text-sm text-muted">No open intents. Closed intents leave no account behind.</p>
+        <div className="py-10 text-center text-sm">
+          <p className="text-fg">No transactions yet</p>
+          <p className="mt-1 text-muted">Closed intents leave no account behind.</p>
+        </div>
       )}
       {rows && rows.length > 0 && (
-        <ul className="space-y-2">
-          {rows.map((r) => (
-            <ActivityRow
-              key={r.pubkey.toBase58()}
-              row={r}
-              refreshKey={refreshKey + tick}
-              onSelect={onSelect}
-              onAction={async (kind) => {
-                const ok = await (kind === "cancel" ? onCancel : onCloseIntent)(r.pubkey.toBase58());
-                if (ok) reload();
-              }}
-            />
+        <div>
+          {groupByDay(rows, today).map(([label, group]) => (
+            <div key={label}>
+              <div className="px-3 py-2 text-base font-medium">{label}</div>
+              <ul className="space-y-0.5">
+                {group.map((r) => (
+                  <ActivityRow
+                    key={r.pubkey.toBase58()}
+                    row={r}
+                    refreshKey={refreshKey + tick}
+                    onSelect={onSelect}
+                    onAction={async (kind) => {
+                      const ok = await (kind === "cancel" ? onCancel : onCloseIntent)(r.pubkey.toBase58());
+                      if (ok) reload();
+                    }}
+                  />
+                ))}
+              </ul>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
     </section>
   );
+}
+
+/** Rows under "Today" / "Yesterday" / date headers, newest first. */
+function groupByDay(rows: Keyed<IntentAccount>[], nowMs: number): [string, Keyed<IntentAccount>[]][] {
+  const day = (ms: number) => new Date(ms).toDateString();
+  const today = day(nowMs);
+  const yesterday = day(nowMs - 86_400_000);
+  const out: [string, Keyed<IntentAccount>[]][] = [];
+  for (const r of rows) {
+    const ms = Number(r.account.auctionStart) * 1000;
+    const d = day(ms);
+    const label =
+      d === today
+        ? "Today"
+        : d === yesterday
+          ? "Yesterday"
+          : new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    const last = out[out.length - 1];
+    if (last && last[0] === label) last[1].push(r);
+    else out.push([label, [r]]);
+  }
+  return out;
 }
 
 function ActivityRow({
@@ -154,13 +196,13 @@ function ActivityRow({
         role="button"
         tabIndex={0}
         onClick={() => onSelect(address)}
-        onKeyDown={(e) => e.key === "Enter" && onSelect(address)}
-        className="flex cursor-pointer flex-col gap-2 rounded-2xl bg-panel p-3 transition hover:bg-panel-hover sm:flex-row sm:items-center sm:gap-4"
+        onKeyDown={(e) => e.target === e.currentTarget && e.key === "Enter" && onSelect(address)}
+        className="flex cursor-pointer flex-col gap-3 bg-panel p-4 transition hover:bg-panel-hover"
       >
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <span className="flex -space-x-2">
-            <SolMark size={24} />
-            <EthMark size={24} />
+          <span className="flex shrink-0 -space-x-2">
+            <SolMark size={28} />
+            <EthMark size={28} />
           </span>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-x-2 text-sm font-medium tabular-nums">
@@ -171,10 +213,12 @@ function ActivityRow({
                 {formatEthAmount(filled ? a.outWei : a.minOutWei)} ETH
               </span>
             </div>
-            <div className="text-xs text-faint">{formatDateTime(Number(a.auctionStart) * 1000)} · SOL → ETH</div>
+            <div className="text-xs text-faint">
+              {formatDateTime(Number(a.auctionStart) * 1000)} · SOL → ETH · {isRfqIntent(a) ? "RFQ" : "Auction"}
+            </div>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-[60px] text-xs">
           <StatusPill status={status} />
           <a
             href={solanaExplorerAddress(address)}
@@ -201,7 +245,7 @@ function ActivityRow({
               disabled={busy}
               onClick={(e) => act(e, "cancel")}
               className={`rounded-full px-2.5 py-1 font-medium disabled:opacity-40 ${
-                expired ? "bg-warn text-black" : "bg-bg/60 text-muted hover:text-fg"
+                expired ? "bg-warn text-black" : "bg-bg text-muted hover:text-fg"
               }`}
             >
               {busy ? "…" : "Cancel"}
