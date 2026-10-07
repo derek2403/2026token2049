@@ -6,6 +6,10 @@
 //! inventory. The program tracks that inventory in each `Solver` ledger and
 //! hands out the pool's Base nonces in order, so the SOL and an irrevocable
 //! payout signature change hands in one Solana transaction.
+//!
+//! RFQ-lite (NEAR Intents style, `rfq.rs`): users keep SOL in a `UserVault`,
+//! sign a canonical message off-chain, and the solver whose quote won submits
+//! `execute_signed_intent`, which writes the same Filled `Intent` as `fill`.
 
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{instruction::Instruction, program::invoke_signed};
@@ -17,6 +21,13 @@ use solana_program::keccak;
 use solana_program::secp256k1_recover::secp256k1_recover;
 
 pub mod eth_rlp;
+pub mod rfq;
+
+pub use rfq::SignedIntentArgs;
+#[allow(deprecated)]
+use solana_program::sysvar::instructions::{
+    load_instruction_at_checked, ID as INSTRUCTIONS_SYSVAR_ID,
+};
 
 declare_id!("BV9KfzKwXPp9hQZEyhoVm9STbDy7gCGCmKcKpCDr8jXA");
 
@@ -575,6 +586,176 @@ pub mod intents {
         Ok(())
     }
 
+    /// Funds the caller's RFQ vault. The first deposit creates it.
+    pub fn deposit_sol(ctx: Context<DepositSol>, amount: u64) -> Result<()> {
+        require!(!ctx.accounts.config.paused, IntentsError::Paused);
+        require!(amount > 0, IntentsError::ZeroAmount);
+        system_program::transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                system_program::Transfer {
+                    from: ctx.accounts.owner.to_account_info(),
+                    to: ctx.accounts.user_vault.to_account_info(),
+                },
+            ),
+            amount,
+        )?;
+        let vault = &mut ctx.accounts.user_vault;
+        vault.owner = ctx.accounts.owner.key();
+        vault.bump = ctx.bumps.user_vault;
+        vault.sol = vault.sol.checked_add(amount).ok_or(IntentsError::MathOverflow)?;
+        emit!(VaultDeposited {
+            owner: vault.owner,
+            amount,
+            sol: vault.sol,
+        });
+        Ok(())
+    }
+
+    /// Ignores pause: users can always take their SOL back.
+    pub fn withdraw_sol(ctx: Context<WithdrawSol>, amount: u64) -> Result<()> {
+        require!(amount > 0, IntentsError::ZeroAmount);
+        let vault = &mut ctx.accounts.user_vault;
+        require!(vault.sol >= amount, IntentsError::InsufficientVaultBalance);
+        move_lamports(
+            &vault.to_account_info(),
+            &ctx.accounts.owner.to_account_info(),
+            amount,
+        )?;
+        vault.sol -= amount;
+        emit!(VaultWithdrew {
+            owner: vault.owner,
+            amount,
+            sol: vault.sol,
+        });
+        Ok(())
+    }
+
+    /// RFQ settlement. The solver signs the transaction (NEAR's
+    /// set_auth_by_predecessor_id); the user's authorization is an Ed25519
+    /// program instruction over `rfq::render_message(args)`. Pays `out_wei` on
+    /// Base exactly like `fill`, then takes `sell_lamports` from the vault.
+    pub fn execute_signed_intent(
+        ctx: Context<ExecuteSignedIntent>,
+        args: SignedIntentArgs,
+    ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let config = &ctx.accounts.config;
+        require!(!config.paused, IntentsError::Paused);
+
+        let ed25519_ix = load_instruction_at_checked(
+            args.ed25519_ix_index as usize,
+            &ctx.accounts.instructions.to_account_info(),
+        )
+        .map_err(|_| error!(IntentsError::InvalidSignatureInstruction))?;
+        let message = rfq::render_message(
+            &crate::ID,
+            &args.user,
+            args.nonce,
+            args.deadline,
+            args.sell_lamports,
+            args.min_out_wei,
+            &args.recipient,
+        );
+        rfq::check_ed25519_ix(&ed25519_ix, &args.user, &message)?;
+
+        rfq::check_deadline(now, args.deadline)?;
+        require!(
+            args.sell_lamports > 0 && args.min_out_wei > 0,
+            IntentsError::ZeroAmount
+        );
+        require!(args.out_wei >= args.min_out_wei, IntentsError::BelowRequiredOut);
+        require!(args.recipient != [0u8; 20], IntentsError::ZeroRecipient);
+        require!(
+            ctx.accounts.user_vault.sol >= args.sell_lamports,
+            IntentsError::InsufficientVaultBalance
+        );
+        check_gas_price(config, args.gas_price)?;
+        require!(args.expected_nonce == config.next_nonce, IntentsError::NonceMoved);
+
+        let cost = payout_cost(args.out_wei, args.gas_price, config.l1_fee_buffer_wei)?;
+        let solver = &mut ctx.accounts.solver;
+        require!(solver.balance_wei >= cost, IntentsError::InsufficientSolverBalance);
+        solver.balance_wei -= cost;
+        solver.fills = solver.fills.saturating_add(1);
+
+        let nonce = config.next_nonce;
+        ctx.accounts.config.next_nonce = nonce.checked_add(1).ok_or(IntentsError::MathOverflow)?;
+
+        let (unsigned_rlp, payload) =
+            build_payout(nonce, args.gas_price, &args.recipient, args.out_wei);
+        request_signature(
+            &ctx.accounts.committee,
+            &ctx.accounts.sig_request,
+            &ctx.accounts.pool,
+            &ctx.accounts.solver_authority.to_account_info(),
+            &ctx.accounts.system_program.to_account_info(),
+            &ctx.accounts.soda_program,
+            ctx.accounts.config.pool_bump,
+            payload,
+        )?;
+
+        // After the CPI, as in `fill`. The vault keeps its rent: sol sits above it.
+        let vault = &mut ctx.accounts.user_vault;
+        move_lamports(
+            &vault.to_account_info(),
+            &ctx.accounts.solver_authority.to_account_info(),
+            args.sell_lamports,
+        )?;
+        vault.sol -= args.sell_lamports;
+
+        // The same Filled record `fill` leaves, so bump_gas, the bots'
+        // delivery loop and the page work unchanged. auction_duration 0 marks RFQ.
+        let sig_request = ctx.accounts.sig_request.key();
+        let intent = &mut ctx.accounts.intent;
+        intent.user = args.user;
+        intent.intent_id = args.nonce;
+        intent.in_lamports = args.sell_lamports;
+        intent.recipient = args.recipient;
+        intent.start_out_wei = args.out_wei;
+        intent.min_out_wei = args.min_out_wei;
+        intent.auction_start = now;
+        intent.auction_duration = 0;
+        intent.expires_at = args.deadline;
+        intent.status = STATUS_FILLED;
+        intent.solver = ctx.accounts.solver_authority.key();
+        intent.out_wei = args.out_wei;
+        intent.base_nonce = nonce;
+        intent.gas_price = args.gas_price;
+        intent.filled_at = now;
+        intent.sig_requests[0] = sig_request;
+        intent.sig_request_count = 1;
+        intent.bump = ctx.bumps.intent;
+
+        emit!(EthTxRequested {
+            sig_request,
+            chain_id: CHAIN_ID,
+            unsigned_rlp,
+        });
+        emit!(IntentFilled {
+            intent: intent.key(),
+            user: intent.user,
+            solver: intent.solver,
+            in_lamports: intent.in_lamports,
+            out_wei: args.out_wei,
+            base_nonce: nonce,
+            gas_price: args.gas_price,
+            sig_request,
+            filled_at: now,
+        });
+        emit!(SignedIntentExecuted {
+            intent: intent.key(),
+            user: intent.user,
+            solver: intent.solver,
+            nonce: args.nonce,
+            sell_lamports: args.sell_lamports,
+            min_out_wei: args.min_out_wei,
+            out_wei: args.out_wei,
+            base_nonce: nonce,
+        });
+        Ok(())
+    }
+
     pub fn set_paused(ctx: Context<AdminOnly>, paused: bool) -> Result<()> {
         ctx.accounts.config.paused = paused;
         Ok(())
@@ -923,6 +1104,17 @@ pub struct Withdrawal {
     pub bump: u8,
 }
 
+/// A user's SOL for RFQ trades. Seeds ["vault", owner]. Holds
+/// rent-exempt minimum + `sol` lamports (more only if someone sends SOL
+/// straight to it).
+#[account]
+#[derive(InitSpace)]
+pub struct UserVault {
+    pub owner: Pubkey,
+    pub sol: u64,
+    pub bump: u8,
+}
+
 /// Marks a Base deposit as credited, by either credit path. Seeds ["credit", tx_hash].
 #[account]
 #[derive(InitSpace)]
@@ -1214,6 +1406,79 @@ pub struct BumpWithdrawalGas<'info> {
 }
 
 #[derive(Accounts)]
+pub struct DepositSol<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    #[account(seeds = [b"config"], bump)]
+    pub config: Box<Account<'info, Config>>,
+    #[account(
+        init_if_needed,
+        payer = owner,
+        space = 8 + UserVault::INIT_SPACE,
+        seeds = [b"vault", owner.key().as_ref()],
+        bump,
+    )]
+    pub user_vault: Account<'info, UserVault>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct WithdrawSol<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"vault", owner.key().as_ref()],
+        bump = user_vault.bump,
+        has_one = owner,
+    )]
+    pub user_vault: Account<'info, UserVault>,
+}
+
+#[derive(Accounts)]
+#[instruction(args: SignedIntentArgs)]
+pub struct ExecuteSignedIntent<'info> {
+    /// The winning solver: pays the Intent and SigRequest rent, receives the SOL.
+    #[account(mut)]
+    pub solver_authority: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"solver", solver_authority.key().as_ref()],
+        bump = solver.bump,
+    )]
+    pub solver: Box<Account<'info, Solver>>,
+    #[account(mut, seeds = [b"config"], bump)]
+    pub config: Box<Account<'info, Config>>,
+    #[account(mut, seeds = [b"vault", args.user.as_ref()], bump = user_vault.bump)]
+    pub user_vault: Box<Account<'info, UserVault>>,
+    /// Exists once per (user, nonce): a replayed signature fails here.
+    #[account(
+        init,
+        payer = solver_authority,
+        space = 8 + Intent::INIT_SPACE,
+        seeds = [b"intent", args.user.as_ref(), &args.nonce.to_le_bytes()],
+        bump,
+    )]
+    pub intent: Box<Account<'info, Intent>>,
+    /// CHECK: address-pinned; soda checks it further.
+    #[account(address = SODA_COMMITTEE)]
+    pub committee: UncheckedAccount<'info>,
+    /// CHECK: created by soda at ["sig", pool, payload]; soda checks the seeds.
+    #[account(mut)]
+    pub sig_request: UncheckedAccount<'info>,
+    /// CHECK: data-less PDA, signs the soda CPI via invoke_signed.
+    #[account(seeds = [b"pool"], bump = config.pool_bump)]
+    pub pool: UncheckedAccount<'info>,
+    /// CHECK: address-pinned soda program.
+    #[account(address = SODA_PROGRAM_ID)]
+    pub soda_program: UncheckedAccount<'info>,
+    /// CHECK: address-pinned instructions sysvar; holds the Ed25519 instruction.
+    #[account(address = INSTRUCTIONS_SYSVAR_ID)]
+    pub instructions: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct AdminOnly<'info> {
     pub admin: Signer<'info>,
     #[account(mut, seeds = [b"config"], bump, has_one = admin)]
@@ -1320,6 +1585,36 @@ pub struct SolverWithdrew {
     pub balance_wei: u128,
 }
 
+#[event]
+pub struct VaultDeposited {
+    pub owner: Pubkey,
+    pub amount: u64,
+    /// Vault balance after the deposit.
+    pub sol: u64,
+}
+
+#[event]
+pub struct VaultWithdrew {
+    pub owner: Pubkey,
+    pub amount: u64,
+    pub sol: u64,
+}
+
+/// Emitted after EthTxRequested and IntentFilled by execute_signed_intent.
+#[event]
+pub struct SignedIntentExecuted {
+    pub intent: Pubkey,
+    pub user: Pubkey,
+    /// Solver authority (wallet).
+    pub solver: Pubkey,
+    /// The user's signed nonce, also the Intent's intent_id.
+    pub nonce: u64,
+    pub sell_lamports: u64,
+    pub min_out_wei: u128,
+    pub out_wei: u128,
+    pub base_nonce: u64,
+}
+
 // ---------------------------------------------------------------- errors
 
 #[error_code]
@@ -1379,6 +1674,19 @@ pub enum IntentsError {
     UntrustedWitness,
     #[msg("deposit_sig is not deposit_from's signature over the register message")]
     DepositFromNotProven,
+    // RFQ-lite (execute_signed_intent, user vaults).
+    #[msg("Not a single-signature Ed25519 instruction verifying its own data")]
+    InvalidSignatureInstruction,
+    #[msg("Ed25519 signer or message does not match the intent")]
+    SignatureMismatch,
+    #[msg("Signed intent deadline has passed")]
+    DeadlinePassed,
+    #[msg("Signed intent deadline is more than 600 s away")]
+    DeadlineTooFar,
+    #[msg("Vault SOL balance is too low")]
+    InsufficientVaultBalance,
+    #[msg("Recipient is the zero address")]
+    ZeroRecipient,
 }
 
 #[cfg(test)]
@@ -1511,6 +1819,7 @@ mod tests {
         assert_eq!(8 + Solver::INIT_SPACE, 105);
         assert_eq!(8 + Intent::INIT_SPACE, 331);
         assert_eq!(8 + Credit::INIT_SPACE, 129);
+        assert_eq!(8 + UserVault::INIT_SPACE, 49);
     }
 
     const POOL_EVM: [u8; 20] = [0x76; 20];
