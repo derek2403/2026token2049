@@ -33,3 +33,14 @@ To show CRE doing the signing rather than racing it, the Railway `soda-mpc-subsc
 Intent `EzMV5oZtA8qTJ29SKhAf6Bgxz9dKcQwgjgPSPHK8ub7d`. The trade took 26 s end to end, because the CRE simulator was started by hand after the fill. A deployed workflow would run on its own trigger.
 
 Reproduce: `npx tsx scripts/cre-sign-payload.ts <intent>`, then `cd cre && cre workflow simulate soda-signer --target simulation-settings --non-interactive --trigger-index 0 --http-payload ./payloads/sign.json --broadcast`.
+
+## /demo rehearsal: frontier's cross-chain signing demo, both signers (2026-10-07 23:16 +08)
+
+These runs used `scripts/demo-rehearse.ts`: the page's own `runPipeline`, with a keypair standing in for Phantom, against a local build with `DEMO_LOCAL_CRE=1`. Each run sent 0.00001 ETH from the test wallet's SODA-derived Base address to itself, through `eth_demo::sign_eth_transfer` → soda `request_signature`.
+
+| Run | Signer | Signing time | Total | Finalize | Base |
+|---|---|---|---|---|---|
+| Subscriber running | **SODA MPC subscriber** | 3.5 s | 6.2 s | [tx](https://explorer.solana.com/tx/4hx2sKWTNTqMKzgKWoiUmy2hmJw1Uj2ca8cy7sssfSm6FXUGhUhcpmGxJdFJZQ6prKv96E9tiBjq9eAjXXuQPVmz?cluster=devnet) | [Basescan](https://sepolia.basescan.org/tx/0x310b365dec3506ba3211ac06a8e7a3233e4cca79c936abc368cb8c736a460a7e) |
+| `npm run demo:cre -- pause-subscriber`, then the page's "Run Chainlink CRE signer" route | **Chainlink CRE → SODA MPC** (forwarder `Report` → `soda_cre_signer::OnReport` → `soda::FinalizeSignature`) | 11.8 s, mostly the CRE simulator starting up | 15.0 s | [tx](https://explorer.solana.com/tx/3yhTZcCNigQnjDkupmqMJtdx9p75Sgi1RAjfuYhQhtNwCPWyAyW6TfqoiRa2JUKcZpbEi7PfctCuashRvMPLwP1F?cluster=devnet) | block 47808973 |
+
+The subscriber was stopped at 23:16:59 and running again at 23:18:00 (`npm run demo:cre -- resume-subscriber`).
