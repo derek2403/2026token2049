@@ -7,6 +7,7 @@
 import { requiredOutForIntent } from "./auction";
 import { IntentStatus, SIG_REQUEST_TTL_SEC } from "./constants";
 import type { IntentAccount } from "./accounts";
+import { isRfqIntent, shortKey } from "./rfq";
 import {
   buildCandidates,
   findDelivered,
@@ -91,9 +92,11 @@ export function intentStatus(input: StatusInput): StatusResult {
     input.candidates ?? (intent.status === IntentStatus.Filled ? buildCandidates(intent, sigRequests) : []);
   const speedingUp = intent.sigRequestCount > 1;
   const sec = (s: bigint) => Number(s) * 1000;
+  // RFQ: the solver settled the user's signed message, so open and matched are one transaction.
+  const rfq = isRfqIntent(intent);
 
   const labels: Record<StepId, string> = {
-    open: "SOL locked in escrow. Finding a solver…",
+    open: rfq ? `Signed intent settled by solver ${shortKey(intent.solver)}` : "SOL locked in escrow. Finding a solver…",
     matched: `Solver matched: delivering ${formatEth(intent.outWei)} ETH`,
     signing: "Committee signing the Base payout",
     signed: "Signature verified on Solana (secp256k1_recover). Safe to close this tab.",
@@ -122,6 +125,7 @@ export function intentStatus(input: StatusInput): StatusResult {
     let prevTs: number | undefined;
     return path.map((id, i) => {
       const ref = { ...auto[id], ...input.refs?.[id], ...extra[id] };
+      if (rfq && id === "matched") delete ref.timestamp; // same tx as open: no fake +0 ms
       const state: StepState = i < at ? "done" : i === at ? currentState : "todo";
       const step: Step = { id, label: labels[id], state, chain: chain(id) };
       if (state !== "todo") {
