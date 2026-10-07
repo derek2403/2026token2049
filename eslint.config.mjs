@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Separate Bun project with its own typecheck.
     "cre/**",
+    // SODA MPC committee: separate npm workspace with its own typecheck.
+    "mpc/**",
   ]),
 ]);
 
