@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Separate Bun project with its own typecheck.
+    "cre/**",
   ]),
 ]);
 
