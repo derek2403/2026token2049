@@ -1,6 +1,7 @@
 // The solver loop (HANDOVER §3.6): watch open intents, price them, fill the ones
 // that clear our curve, then deliver every pending Base payout (fills and
-// solver withdrawals) and bump gas on stuck ones (§3.5).
+// solver withdrawals) and bump gas on stuck ones (§3.5). It also answers RFQ
+// quotes and settles signed intents (rfq.ts).
 
 import type { Program } from "@coral-xyz/anchor";
 import { Connection, Keypair, PublicKey, SYSVAR_CLOCK_PUBKEY } from "@solana/web3.js";
@@ -49,9 +50,17 @@ import {
 } from "./chain";
 import { hexAddr } from "./evm";
 import { intentHistory } from "./history";
-import { Pricer, SIG_REQUEST_RENT_LAMPORTS, SOLANA_BASE_FEE_LAMPORTS, type QuoteCosts } from "./pricing";
+import {
+  ED25519_VERIFY_FEE_LAMPORTS,
+  INTENT_RENT_LAMPORTS,
+  Pricer,
+  SIG_REQUEST_RENT_LAMPORTS,
+  SOLANA_BASE_FEE_LAMPORTS,
+  type QuoteCosts,
+} from "./pricing";
 import { fetchPythPrices } from "./pyth";
-import type { Quote, QuoteSource } from "./server";
+import { RfqDesk, type RfqExecuted, type RfqPrice } from "./rfq";
+import type { HttpResult, Quote, QuoteSource } from "./server";
 import { ProgramWatcher, type OpenIntentFields, type WatchedTx } from "./watcher";
 
 export type SolverSettings = {
@@ -77,6 +86,10 @@ export type SolverSettings = {
   otherBumpAfterMs: number;
   includeSigRent: boolean;
   checkRecipientCode: boolean;
+  /** RFQ: price the Intent rent the solver pays (default true). */
+  includeIntentRent?: boolean;
+  /** RFQ: how long a /rfq/quote binds this solver (default 30 s). */
+  rfqQuoteTtlMs?: number;
 };
 
 type OpenIntent = OpenIntentFields;
@@ -117,6 +130,8 @@ const withdrawalPayout = (w: WithdrawalAccount): Payout => ({
 const WITHDRAWAL_SCAN = 64n;
 /** How long a recipient that passed the code check stays trusted. */
 const RECIPIENT_OK_TTL_MS = 10 * 60_000;
+/** plainRecipient entries kept (oldest dropped): public RFQ quotes can name any recipient. */
+const MAX_RECIPIENT_CACHE = 5_000;
 
 const log = (msg: string) => console.log(`${new Date().toISOString()} ${msg}`);
 const short = (k: PublicKey | string) => {
@@ -140,6 +155,9 @@ export class Solver implements QuoteSource {
   /** Signatures already handled, so the websocket and the watcher do not double-log. */
   private readonly handledSigs = new Set<string>();
   private busy = { tick: false, deliver: false, poll: false, anchor: false };
+  /** fill and execute_signed_intent both take config.next_nonce: one in flight at a time. */
+  private submitQueue: Promise<unknown> = Promise.resolve();
+  private readonly rfq: RfqDesk;
 
   private config: ConfigAccount | null = null;
   private ledger: SolverAccount | null = null;
@@ -169,6 +187,25 @@ export class Solver implements QuoteSource {
     this.poolHex = hexAddr(poolEvmAddress(undefined, s.programId));
     this.pricer = new Pricer(s.depthMult);
     this.gasPrice = s.gasFloorWei;
+    this.rfq = new RfqDesk({
+      conn,
+      program,
+      keypair,
+      programId: s.programId,
+      price: (n) => this.rfqPrice(n),
+      recipientOk: (r) => this.recipientOk(r),
+      serial: (fn) => this.serial(fn),
+      onExecuted: (e) => this.onRfqExecuted(e),
+      quoteTtlMs: s.rfqQuoteTtlMs,
+      priorityMicroLamports: s.priorityMicroLamports,
+      log,
+    });
+  }
+
+  private serial<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.submitQueue.then(fn, fn);
+    this.submitQueue = run.catch(() => {});
+    return run;
   }
 
   // ------------------------------------------------------------ lifecycle
@@ -244,6 +281,11 @@ export class Solver implements QuoteSource {
           break;
         case "IntentCancelled":
           this.open.delete(k);
+          break;
+        case "Other":
+          if (ev.eventName === "SignedIntentExecuted" && !backfill && String(ev.data.solver) !== this.solver) {
+            log(`RFQ intent ${short(String(ev.data.intent))} settled by ${short(String(ev.data.solver))} (${signature})`);
+          }
           break;
         case "GasBumped": {
           const t = this.tracked.get(k);
@@ -366,6 +408,43 @@ export class Solver implements QuoteSource {
     return { outWei, minOutWei, validUntil: Math.floor((this.pricer.anchor.atMs + this.s.anchorMs) / 1000) };
   }
 
+  private rfqExtraLamports(): bigint {
+    return ED25519_VERIFY_FEE_LAMPORTS + (this.s.includeIntentRent === false ? 0n : INTENT_RENT_LAMPORTS);
+  }
+
+  /** RFQ price: like quote(), with the Intent rent and the Ed25519 signature fee also off the input. */
+  rfqPrice(inLamports: bigint): RfqPrice {
+    if (!this.priced()) return { error: "no fresh prices or no inventory" };
+    if (this.config?.paused) return { error: "intents program is paused" };
+    if (this.overCap()) return { error: "Base gas price is above max_gas_price" };
+    const gasPrice = this.payoutGasPrice();
+    const base = this.costs(gasPrice);
+    const costs = { ...base, solCostLamports: base.solCostLamports + this.rfqExtraLamports() };
+    const outWei = this.pricer.maxOut(inLamports, costs);
+    if (outWei === 0n) return { error: "amount too small to cover fees" };
+    if (payoutCost(outWei, gasPrice, this.config?.l1FeeBufferWei ?? 0n) > (this.ledger?.balanceWei ?? 0n)) {
+      return { error: "exceeds solver inventory" };
+    }
+    return { outWei, breakEvenWei: this.pricer.maxOut(inLamports, { ...costs, spreadBps: 0n }), gasPrice };
+  }
+
+  rfqQuote(body: unknown): Promise<HttpResult> {
+    return this.rfq.quote(body);
+  }
+
+  rfqExecute(body: unknown): Promise<HttpResult> {
+    return this.rfq.execute(body);
+  }
+
+  /** Our settlement landed: track its payout like one of our fills. */
+  private onRfqExecuted(e: RfqExecuted): void {
+    this.fills++;
+    this.unsignedBySigRequest.set(e.sigRequest.toBase58(), e.unsignedRlp);
+    this.pricer.applyFill(e.sellLamports, this.costs(e.gasPrice).solCostLamports + this.rfqExtraLamports());
+    this.track(e.intent, "intent", null, true).hints.add(e.gasPrice);
+    this.watcher.noteFilled(e.intent, e.gasPrice, e.baseNonce);
+  }
+
   health(): Record<string, unknown> {
     const rate = this.pricer.oracleEthPerSol18();
     return {
@@ -397,6 +476,7 @@ export class Solver implements QuoteSource {
       },
       pendingPayouts: [...this.tracked.values()].filter((t) => !t.done).length,
       fills: this.fills,
+      rfq: { quotesHeld: this.rfq.size, ...this.rfq.stats },
       baseRpc: !!this.base,
       uptimeSec: Math.floor((Date.now() - this.startedAt) / 1000),
     };
@@ -491,7 +571,7 @@ export class Solver implements QuoteSource {
           log(`intent ${short(k)} skipped: recipient ${hexAddr(o.intent.recipient)} has code (21000 gas payout would revert)`);
           continue;
         }
-        await this.fill(o.key, o.intent, required, gas);
+        await this.serial(() => this.fill(o.key, o.intent, required, gas));
         break; // next_nonce moved; re-read state on the next tick
       }
     } catch (e) {
@@ -514,7 +594,11 @@ export class Solver implements QuoteSource {
     if (cached && (!cached.ok || Date.now() - cached.at < RECIPIENT_OK_TTL_MS)) return cached.ok;
     try {
       const ok = await isPlainAddress(this.base, k);
+      this.plainRecipient.delete(k); // re-insert as newest
       this.plainRecipient.set(k, { ok, at: Date.now() });
+      if (this.plainRecipient.size > MAX_RECIPIENT_CACHE) {
+        this.plainRecipient.delete(this.plainRecipient.keys().next().value as string);
+      }
       return ok;
     } catch (e) {
       log(`recipient ${k} code check failed, will retry: ${errMsg(e)}`);
