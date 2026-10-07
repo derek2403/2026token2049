@@ -159,7 +159,7 @@ export function RfqPanel({ onOrder }: { onOrder: (intent: string) => void }) {
       const message = renderIntentMessage(fields);
       setSigningText(new TextDecoder().decode(message));
       const signature = await signMessage(message);
-      const signedAt = Date.now();
+      const signedAt = nowMs();
       if (!verifyIntentSignature(message, signature, publicKey)) {
         throw new Error("The wallet returned a signature that does not verify over the message");
       }
@@ -170,7 +170,7 @@ export function RfqPanel({ onOrder }: { onOrder: (intent: string) => void }) {
         trackPending(r.intent, signedAt, r.tx);
       } else {
         // Lets the drawer show "signed → settled" as the first measured step.
-        saveOrder({ intent: r.intent, openSig: r.tx, sentAt: signedAt, observed: { open: Date.now() } });
+        saveOrder({ intent: r.intent, openSig: r.tx, sentAt: signedAt, observed: { open: nowMs() } });
         setNotice({ kind: "ok", text: `Settled by solver ${shortKey(quote.solver)}`, href: solanaExplorerTx(r.tx) });
         q.clear();
         refreshVault();
@@ -414,6 +414,9 @@ export function RfqPanel({ onOrder }: { onOrder: (intent: string) => void }) {
     </div>
   );
 }
+
+// Outside the component so react-hooks/purity accepts the event-handler use.
+const nowMs = () => Date.now();
 
 function QuoteRow({ quote, best, now }: { quote: RelayQuote; best: boolean; now: number }) {
   const left = Math.max(0, quote.expiration_time - now);
