@@ -176,3 +176,53 @@ Already wired by the UI session:
 - ActivityPanel rows show "· RFQ" or "· Auction" via `isRfqIntent`.
 - OrderDrawer shows an RFQ badge (`data.isRfq`), and the signed step uses `data.signing.label`.
 - **Still to wire:** the `delivered` badge, once `/api/payout` returns `delivered`.
+
+## Chainlink vs not: signer attribution and the "who does what" map
+
+`/api/payout` (and so the relay's `get_status`) now also returns, additively:
+
+```ts
+signer: {                       // always present
+  via: "chainlink-cre" | "mpc-subscriber" | "pending";
+  finalizeTx?: string;          // the soda::finalize_signature tx
+  forwarder?: "mock" | "production";   // chainlink-cre only
+  label: string;                // "Signed via Chainlink CRE → SODA MPC" | "Signed via SODA MPC subscriber" | "pending"
+};
+signing?: { …unchanged…, via?, finalizeTx? };   // same values, once timing exists
+providers: {
+  quote: "Solvers (off-chain)",
+  settle: "Solana program",
+  sign: signer.via,
+  deliver: "Base",
+  depositProof: "Chainlink CRE (Witness)",
+};
+```
+
+`via` is read from the finalize transaction itself (`app/lib/server/signer-attribution.ts`): it is `chainlink-cre` when that tx went through Chainlink's forwarder (`7kuEAA3m…` mock / `CXsKEJc…` production) into `soda_cre_signer` `2cgtuK2Y…`, which CPIs `soda::finalize_signature`; otherwise `mpc-subscriber`. Checked on devnet: intent `EzMV5oZt…` → `chainlink-cre` (mock forwarder), intent `FxDnJRsh…` → `mpc-subscriber`.
+
+Suggested UI (OrderDrawer step list): a small badge on the "Signature verified" step, `bg-accent-soft text-accent` "Chainlink CRE" when `data.signer.via === "chainlink-cre"`, `bg-panel text-muted` "SODA MPC" for `mpc-subscriber`, linking `finalizeTx` to the Solana explorer. A legend row can render `providers` with a Chainlink mark on `depositProof` always and on `sign` only when it is `chainlink-cre`.
+
+## "Start above market" (Dutch auction that visibly decays)
+
+**Why the auction fills immediately today.** A solver's `/quote` is the most it will pay right now (its `maxOut`), and a solver fills as soon as `required_out <= maxOut`. `SwapForm` sets `start_out = best quote`, so at t = 0 the requirement already equals the solver's price and the fill is immediate. That is correct behaviour, not a bug.
+
+**Option.** `app/lib/auction-start.ts` exports `presetParamsWithPremium(preset, quoteWei, nowSec, premiumBps)`. With `premiumBps = 0` it returns exactly `presetParams(preset, quoteWei, nowSec)`; otherwise `startOutWei = quote × (1 + N/10_000)` with `minOutWei` unchanged (quote × (1 − tolerance)), plus `expectedFillAfterSec ≈ duration × N / (N + toleranceBps)` (fair, N = 100 → ≈ 30 s). `MAX_START_PREMIUM_BPS = 1000`.
+
+To expose it in `SwapForm.tsx` (UI session only):
+
+```tsx
+import { presetParamsWithPremium } from "@/app/lib/auction-start";
+
+const [premiumBps, setPremiumBps] = useState(0);        // e.g. a "Start above market" toggle → 100
+// line ~176, replacing presetParams(preset, startOut, nowSec):
+const params = presetParamsWithPremium(preset, startOut, nowSec, premiumBps);
+// and pass params.startOutWei (not startOut) as startOutWei to open_intent.
+// The "you receive" range shows formatEth(params.startOutWei) → formatEth(params.minOutWei),
+// and a hint: `Solvers should fill after ≈${params.expectedFillAfterSec}s`.
+```
+
+The existing OrderDrawer auction bar (`startOutWei` → `minOutWei` with `requiredOutWei` from `/api/payout`) then shows the decay live. CLI equivalent: `npm run cli -- trade --sol 0.01 --preset fair --start-premium-bps 100` prints `required_out` every second until a solver fills.
+
+## Local CRE demo route
+
+`POST /api/demo/cre-sign {"sigRequest": "<SigRequest or intent>"}` runs `cre workflow simulate soda-signer … --broadcast` on the local machine and returns `{exitCode, durationMs, userLogs, logTail, attribution}`. It returns 404 unless `DEMO_LOCAL_CRE=1`, so it is inert on Railway. A "Sign with Chainlink CRE" button can call it only when a `GET` to the same route answers 200.
