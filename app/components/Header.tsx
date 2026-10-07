@@ -37,7 +37,15 @@ export function Header({
 }) {
   return (
     <header className="sticky top-0 z-40 flex h-[72px] items-center justify-between gap-2 px-2 backdrop-blur-[25px] sm:px-5">
-      <Logo />
+      <div className="flex items-center gap-2 sm:gap-6">
+        <Logo />
+        <Link
+          href="/demo"
+          className="hidden h-10 items-center rounded-full px-4 text-base text-fg transition hover:bg-panel-hover sm:flex"
+        >
+          Demo
+        </Link>
+      </div>
       <div className="flex items-center gap-2">
         <WalletButton onOpen={onAccount} />
         <NotificationBell notices={notices} unread={unread} onOpen={onReadAll} onNotice={onNotice} />
@@ -51,11 +59,21 @@ function Logo() {
   return (
     <Link href="/" className="flex items-start text-fg" aria-label="SODA Intents home">
       <span className="text-[28px] leading-none font-medium tracking-[-0.02em]">soda</span>
-      {/* Two square bubbles rising off the "a". */}
-      <svg width="12" height="14" viewBox="0 0 12 14" aria-hidden className="-mt-0.5 ml-0.5">
-        <rect x="1" y="7" width="4" height="4" fill="currentColor" />
-        <rect x="7" y="1" width="3" height="3" fill="var(--accent)" />
-      </svg>
+      {/* The brand mark, tinted with the text colour via its alpha mask. */}
+      <span
+        aria-hidden
+        className="-ml-2 -mr-2 -mt-1 block h-9 w-9 bg-current"
+        style={{
+          maskImage: "url(/logo.png)",
+          WebkitMaskImage: "url(/logo.png)",
+          maskSize: "contain",
+          WebkitMaskSize: "contain",
+          maskRepeat: "no-repeat",
+          WebkitMaskRepeat: "no-repeat",
+          maskPosition: "center",
+          WebkitMaskPosition: "center",
+        }}
+      />
     </Link>
   );
 }
@@ -235,6 +253,9 @@ function OverlayMenu({ onActivity }: { onActivity: () => void }) {
                 >
                   Activity
                 </MenuItem>
+                <MenuItem href="/demo" internal>
+                  Demo
+                </MenuItem>
               </MenuColumn>
               <MenuColumn title="On chain">
                 <MenuItem href={solanaExplorerAddress(INTENTS_PROGRAM_ID.toBase58())}>Intents program</MenuItem>
@@ -274,11 +295,25 @@ function MenuColumn({ title, children }: { title: string; children: ReactNode })
   );
 }
 
-function MenuItem({ href, onClick, children }: { href?: string; onClick?: () => void; children: ReactNode }) {
+function MenuItem({
+  href,
+  internal,
+  onClick,
+  children,
+}: {
+  href?: string;
+  internal?: boolean;
+  onClick?: () => void;
+  children: ReactNode;
+}) {
   const cls = "text-2xl leading-8 font-[450] text-fg transition hover:text-accent";
   return (
     <li>
-      {href ? (
+      {href && internal ? (
+        <Link href={href} className={cls}>
+          {children}
+        </Link>
+      ) : href ? (
         <a href={href} target="_blank" rel="noreferrer" className={cls}>
           {children} <span className="text-base text-faint">↗</span>
         </a>
