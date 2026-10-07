@@ -1,0 +1,7 @@
+node_modules/
+**/shares/
+share-p*.json
+keyshare*.json
+.env
+.env.*
+!.env.example
