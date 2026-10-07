@@ -56,10 +56,38 @@ export type IntentJson = {
   sigRequestCount: number;
 };
 
+/** A Step plus where it landed on Solana (Base steps carry no slot). */
+export type PayoutStep = Step & {
+  /** Slot of the step's Solana transaction. */
+  slot?: number;
+  /** "signed" step only: slots from the tx that created the SigRequest to its finalize tx. */
+  signingSlots?: number;
+  /** signingSlots × 400 ms (Solana's target slot time); an estimate, not a wall-clock measurement. */
+  signingMsApprox?: number;
+};
+
+/** Committee signing measured in slots, not whole-second block times. */
+export type SigningTiming = {
+  /** The fill / execute_signed_intent (or bump_gas) tx that created the SigRequest. */
+  fromSlot: number;
+  fromTx: string;
+  /** The finalize_signature tx (signature verified on Solana). */
+  toSlot: number;
+  toTx: string;
+  slots: number;
+  msApprox: number;
+  /** e.g. "≈2.8 s (7 slots)". */
+  label: string;
+};
+
 export type PayoutResponse = {
   intent: IntentJson;
   status: OrderStatus;
-  steps: Step[];
+  steps: PayoutStep[];
+  /** Settled from a signed message by execute_signed_intent (auction_duration 0), not a Dutch auction. */
+  isRfq: boolean;
+  /** Set once the first SigRequest is signed and both txs are found. */
+  signing?: SigningTiming;
   candidates: {
     index: number;
     sigRequest: string;
