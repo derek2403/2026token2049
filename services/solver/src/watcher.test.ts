@@ -263,6 +263,44 @@ test("SolverWithdrew and WithdrawalGasBumped index withdrawals by pool nonce", a
   await w.stop();
 });
 
+const signedEv = (intent: PublicKey, nonce: bigint) =>
+  encodeEvent("SignedIntentExecuted", {
+    intent,
+    user: Keypair.generate().publicKey,
+    solver: SOLVER,
+    nonce: bn(1_759_830_000_123n),
+    sell_lamports: bn(100_000_000),
+    min_out_wei: bn(4n * 10n ** 15n),
+    out_wei: bn(4n * 10n ** 15n),
+    base_nonce: bn(nonce),
+  });
+
+test("RFQ settlements (IntentFilled + SignedIntentExecuted) are indexed as filled payouts", async () => {
+  const fake = new FakeConn();
+  const a = key();
+  const b = key();
+  fake.push(programLogs(PID, [await filledEv(a, 7n, 1_000_000n), await signedEv(a, 7n)]));
+  fake.accounts.set(a.toBase58(), await intentAccount(1, 7n, 1_000_000n));
+  const { w } = watcher(fake);
+  const seen: WatchedTx[] = [];
+  await w.start((t) => seen.push(t));
+  assert.deepEqual(w.filledKeys().map(String), [a.toBase58()]);
+  assert.deepEqual(w.gasHints(a), [1_000_000n]);
+  assert.ok(w.knowsNonce(7n));
+  assert.deepEqual(seen[0].events.map((e) => (e.name === "Other" ? e.eventName : e.name)), ["IntentFilled", "SignedIntentExecuted"]);
+
+  // SignedIntentExecuted on its own is enough to index the payout and its nonce.
+  fake.push(programLogs(PID, [await signedEv(b, 8n)]));
+  fake.accounts.set(b.toBase58(), await intentAccount(1, 8n, 2_000_000n));
+  await w.pollOnce();
+  const f = w.filledEntries().find((e) => e.key.equals(b))!;
+  assert.ok(f.solver?.equals(SOLVER));
+  assert.equal(f.baseNonce, 8n);
+  assert.ok(w.knowsNonce(8n));
+  assert.deepEqual((await w.fetchFilled()).map((x) => x.pubkey.toBase58()).sort(), [a.toBase58(), b.toBase58()].sort());
+  await w.stop();
+});
+
 test("a transaction the RPC cannot return yet holds the backlog at the poll rate (no failure), keeping order", async () => {
   const fake = new FakeConn();
   const { w } = watcher(fake, { txConcurrency: 1 });
