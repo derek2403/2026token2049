@@ -5,17 +5,24 @@
 import { PublicKey, type Connection } from "@solana/web3.js";
 import { parseIntentsLogs, type IntentsEvent, type StepId, type StepRef } from "@/lib/intents";
 
-type TxEvents = { signature: string; blockTime: number | null; events: IntentsEvent[] };
+type TxEvents = { signature: string; slot: number; blockTime: number | null; events: IntentsEvent[] };
+
+/** A step's tx with its slot: block times are whole seconds, slots are ~400 ms. */
+export type SlotRef = StepRef & { txHash: string; slot: number };
 
 const txCache = new Map<string, TxEvents>();
-const finalizeCache = new Map<string, StepRef>();
+const finalizeCache = new Map<string, SlotRef>();
 
 export type IntentHistory = {
   txs: TxEvents[];
   events: IntentsEvent[];
   refs: Partial<Record<StepId, StepRef>>;
-  /** Signatures of the txs that created each SigRequest (fill, bump_gas). */
+  /** Signatures of the txs that created each SigRequest (fill, execute_signed_intent, bump_gas). */
   creatorTxs: Set<string>;
+  /** SigRequest (base58) → the tx that created it. */
+  creatorBySigRequest: Map<string, SlotRef>;
+  /** Tx signature → slot, for every tx in `txs`. */
+  slotByTx: Map<string, number>;
 };
 
 const historyCache = new Map<string, { at: number; value: IntentHistory }>();
@@ -44,6 +51,7 @@ export async function intentHistory(conn: Connection, intent: PublicKey): Promis
       if (!tx) return; // not yet visible at this commitment; retried next poll
       txCache.set(missing[i], {
         signature: missing[i],
+        slot: tx.slot,
         blockTime: tx.blockTime ?? null,
         events: parseIntentsLogs(tx.meta?.logMessages ?? []),
       });
@@ -57,24 +65,36 @@ export async function intentHistory(conn: Connection, intent: PublicKey): Promis
 
   const refs: Partial<Record<StepId, StepRef>> = {};
   const creatorTxs = new Set<string>();
-  const at = (t: TxEvents): StepRef => ({
+  const creatorBySigRequest = new Map<string, SlotRef>();
+  const at = (t: TxEvents): SlotRef => ({
     txHash: t.signature,
+    slot: t.slot,
     timestamp: t.blockTime != null ? t.blockTime * 1000 : undefined,
   });
+  const self = intent.toBase58();
   for (const t of txs) {
     for (const e of t.events) {
+      // RFQ: execute_signed_intent opens and fills in one transaction.
+      if (e.name === "Other" && e.eventName === "SignedIntentExecuted" && String(e.data.intent) === self) {
+        refs.open = at(t);
+      }
       if (!("intent" in e) || !e.intent.equals(intent)) continue;
       if (e.name === "IntentOpened") refs.open = at(t);
       if (e.name === "IntentFilled") {
         refs.matched = at(t);
         refs.signing = at(t); // the fill CPI creates the first SigRequest
         creatorTxs.add(t.signature);
+        creatorBySigRequest.set(e.sigRequest.toBase58(), at(t));
       }
-      if (e.name === "GasBumped") creatorTxs.add(t.signature);
+      if (e.name === "GasBumped") {
+        creatorTxs.add(t.signature);
+        creatorBySigRequest.set(e.sigRequest.toBase58(), at(t));
+      }
       if (e.name === "IntentCancelled") refs.cancelled = at(t);
     }
   }
-  return { txs, events: txs.flatMap((t) => t.events), refs, creatorTxs };
+  const slotByTx = new Map(txs.map((t) => [t.signature, t.slot]));
+  return { txs, events: txs.flatMap((t) => t.events), refs, creatorTxs, creatorBySigRequest, slotByTx };
 }
 
 /** The finalize_signature tx for a completed SigRequest: its newest tx that did not create it. */
@@ -82,14 +102,19 @@ export async function finalizeRef(
   conn: Connection,
   sigRequest: PublicKey,
   creatorTxs: Set<string>,
-): Promise<StepRef | undefined> {
+): Promise<SlotRef | undefined> {
   const key = sigRequest.toBase58();
   const hit = finalizeCache.get(key);
   if (hit) return hit;
   const sigs = await conn.getSignaturesForAddress(sigRequest, { limit: 10 });
   const fin = sigs.find((s) => !s.err && !creatorTxs.has(s.signature));
   if (!fin) return undefined;
-  const ref: StepRef = { txHash: fin.signature, timestamp: fin.blockTime != null ? fin.blockTime * 1000 : undefined };
+  const ref: SlotRef = {
+    txHash: fin.signature,
+    slot: fin.slot,
+    timestamp: fin.blockTime != null ? fin.blockTime * 1000 : undefined,
+  };
   finalizeCache.set(key, ref);
+  if (finalizeCache.size > 2000) finalizeCache.delete(finalizeCache.keys().next().value!);
   return ref;
 }
