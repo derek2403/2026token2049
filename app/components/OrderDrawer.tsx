@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { basescanTx, requiredOutForIntent, solanaExplorerAddress, solanaExplorerTx, type Step } from "@/lib/intents";
-import type { PayoutResponse } from "@/app/lib/api-types";
+import type { PayoutResponse, SignerVia } from "@/app/lib/api-types";
 import { formatClock, formatCountdown, formatDuration, formatEthAmount, formatSol, shortAddr } from "@/app/lib/format";
 import { withMeasuredTimes, type OrderView } from "@/app/hooks/useOrder";
 import { ChainBadge, TokenWithChain } from "./icons";
@@ -49,14 +49,7 @@ function stepTiming(s: Step & { elapsedMs?: number }, data: PayoutResponse): str
 /** Chainlink's brand blue, used only to mark the parts Chainlink runs. */
 export const CHAINLINK_BLUE = "#375BD2";
 
-type SigningVia = "chainlink-cre" | "mpc-subscriber" | "pending";
-
-/** Who drove the committee's signature, once /api/payout reports it. */
-function signingVia(data: PayoutResponse): SigningVia | undefined {
-  return (data.signing as { via?: SigningVia } | undefined)?.via;
-}
-
-function SignerPill({ via }: { via: SigningVia | undefined }) {
+function SignerPill({ via }: { via: SignerVia }) {
   if (via === "chainlink-cre")
     return (
       <span
@@ -166,7 +159,7 @@ export function OrderDrawer({
                       {STEP_TITLE[s.id] ?? s.id}
                     </span>
                     <ChainBadge chain={s.chain} />
-                    {(s.id === "signing" || s.id === "signed") && <SignerPill via={signingVia(data)} />}
+                    {(s.id === "signing" || s.id === "signed") && <SignerPill via={data.signer.via} />}
                   </div>
                   {s.state !== "todo" && <p className="mt-0.5 text-sm text-muted">{s.label}</p>}
                   {s.state !== "todo" && (s.timestamp !== undefined || s.txHash) && (
