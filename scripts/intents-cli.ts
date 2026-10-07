@@ -115,6 +115,7 @@ import {
   signDepositProof,
 } from "../services/solver/src/evm";
 import { intentHistory } from "../services/solver/src/history";
+import { presetParamsWithPremium } from "../app/lib/auction-start";
 
 const EXPECTED_POOL_EVM = "0x7662920f66682d8996ec6b6d9e4ac9ed25a1006c";
 const DEFAULT_ADMIN_KEYPAIR = "~/.config/solana/token2049-deployer.json";
@@ -151,7 +152,9 @@ const HELP = `SODA Intents CLI
   deposit          --eth X [--to 0x..] [--yes]                      BOT_ID wallet → pool (dry run without --yes)
   open-intent      --sol X [--preset fast|fair|auction] [--recipient 0x..]
                    [--start-eth X | --quote-url URL] [--min-eth X] [--no-code-check]   user
-  trade            same flags as open-intent, plus [--timeout SEC]  open, then follow to completion
+  trade            same flags as open-intent, plus [--timeout SEC] [--start-premium-bps N]
+                   open, then follow to completion. --start-premium-bps starts the auction N bps
+                   above the best quote (min out unchanged) so it visibly decays before a fill
   cancel           <intent>                                         user
   close            <intent> [--admin]                               user (cancelled) or admin (filled)
   status           <intent>
@@ -200,6 +203,7 @@ const { values: flags, positionals } = parseArgs({
     timeout: { type: "string" },
     relay: { type: "string" },
     "deadline-sec": { type: "string" },
+    "start-premium-bps": { type: "string" },
     all: { type: "boolean" },
     "no-code-check": { type: "boolean" },
     yes: { type: "boolean" },
@@ -572,9 +576,12 @@ async function openIntent(): Promise<{ intent: PublicKey; sig: string; sentAt: n
     throw new Error(`balance ${Number(balance) / LAMPORTS_PER_SOL} SOL < ${Number(inLamports + rent) / LAMPORTS_PER_SOL} SOL + fees`);
   }
 
-  const start = str("start-eth") ? parseEther(str("start-eth")!) : await bestQuote(inLamports);
+  const quote = str("start-eth") ? parseEther(str("start-eth")!) : await bestQuote(inLamports);
+  const premiumBps = Number(str("start-premium-bps") ?? "0");
   const now = await clusterTime(conn);
-  const p = presetParams(presetId, start, now);
+  // Premium 0 is exactly presetParams(preset, quote, now).
+  const p = presetParamsWithPremium(presetId, quote, now, premiumBps);
+  const start = p.startOutWei;
   const minOut = str("min-eth") ? parseEther(str("min-eth")!) : p.minOutWei;
   if (minOut > start || minOut === 0n) throw new Error("need 0 < min out <= start out");
   const intentId = BigInt(Date.now());
@@ -583,6 +590,9 @@ async function openIntent(): Promise<{ intent: PublicKey; sig: string; sentAt: n
   console.log(`user        ${user.publicKey.toBase58()}`);
   console.log(`sell        ${Number(inLamports) / LAMPORTS_PER_SOL} SOL (+ ${Number(rent) / LAMPORTS_PER_SOL} SOL rent, returned on close)`);
   console.log(`receive     ${formatEth(start)} → ${formatEth(minOut)} ETH over ${p.auctionDuration}s (${presetId})`);
+  if (premiumBps > 0) {
+    console.log(`premium     start ${premiumBps} bps above the best quote ${formatEth(quote)} ETH; a solver should fill after ≈${p.expectedFillAfterSec}s`);
+  }
   console.log(`recipient   ${checksumAddr(recipient)}${str("recipient") ? "" : " (your SODA-derived Base address)"}`);
   console.log(`intent      ${intent.toBase58()}`);
   const sentAt = Date.now();
@@ -712,6 +722,10 @@ async function follow(intent: PublicKey, sentAt: number, since: number, refs: Pa
       return;
     }
     if (r.status === "cancelled") return;
+    if (r.status === "open" && r.requiredOutWei !== undefined) {
+      const t = Math.round((Date.now() - sentAt) / 1000);
+      console.log(`    t+${String(t).padStart(3)}s  required_out ${formatEth(r.requiredOutWei)} ETH  (auction ends in ${r.auctionEndsIn ?? "?"}s)`);
+    }
     await sleep(1_000);
   }
   console.log(`\ntimed out; follow with: npx tsx scripts/intents-cli.ts status ${intent.toBase58()}`);
