@@ -1,0 +1,10 @@
+{
+  "chainSelector": "16423721717087811551",
+  "receiverProgramId": "5v97wLYgMzyfQfpZWGQ6uPXTHh4JsJitUXPReYy2uuTp",
+  "forwarderProgramId": "CXsKEJcs25TQEYU2e5jZ8QTPE3ffMLZhH6BWHrdcCCB5",
+  "forwarderState": "8QoomCQyPSkJ8WopJbX9B4HyvrFzziwvJdU8hZE6DCr9",
+  "witnessConfig": "5Dxc9Y6sWUwvcLUhatWAHmBwVnKfUXPu5cuWccZZCNRY",
+  "chainId": 84532,
+  "minConfirmations": 3,
+  "authorizedEvmKey": "0xTODO_trigger_signer_address"
+}
