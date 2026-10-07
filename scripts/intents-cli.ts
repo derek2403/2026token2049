@@ -2,7 +2,9 @@
 //   npx tsx scripts/intents-cli.ts <command> [flags]      (or: npm run cli -- <command> ...)
 // `help` lists the commands. Only `deposit` touches Base, and only with --yes.
 
+import { randomUUID } from "node:crypto";
 import { parseArgs } from "node:util";
+import { ed25519 } from "@noble/curves/ed25519";
 import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, type TransactionInstruction } from "@solana/web3.js";
 import bs58 from "bs58";
 import {
@@ -10,7 +12,9 @@ import {
   GROUP_PK,
   INTENT_SIZE,
   IntentStatus,
+  RFQ_MAX_DEADLINE_SECS,
   SPEED_PRESETS,
+  USER_VAULT_SIZE,
   accountDiscriminator,
   baseRpc,
   basescanAddress,
@@ -20,7 +24,9 @@ import {
   configPda,
   creditPda,
   decodeSolver,
+  decodeUserVault,
   decodeWitnessClaim,
+  encodeSignedIntent,
   depositProofMessage,
   fetchConfig,
   fetchIntent,
@@ -28,6 +34,7 @@ import {
   fetchOpenIntents,
   fetchSigRequests,
   fetchSolver,
+  fetchUserVault,
   formatEth,
   getReceipt,
   intentFilters,
@@ -47,7 +54,17 @@ import {
   witnessTrusted,
   decodeWithdrawal,
   minBumpGasPrice,
+  newIntentNonce,
+  renderIntentMessage,
+  rfqExecuteRequest,
+  shortKey,
+  vaultPda,
   type EthReceipt,
+  type IntentMessageFields,
+  type RelayPublishResponse,
+  type RelayQuote,
+  type RfqExecuteResponse,
+  type RfqQuoteResponse,
   type SpeedPresetId,
   type StatusResult,
   type StepRef,
@@ -63,6 +80,7 @@ import {
   connection,
   creditSolverFromClaimIx,
   creditSolverIx,
+  depositSolIx,
   initConfigIx,
   intentsProgram,
   openIntentIx,
@@ -74,6 +92,7 @@ import {
   sleep,
   solverWithdrawIx,
   TxError,
+  withdrawSolIx,
 } from "../services/solver/src/chain";
 import {
   baseRpcUrl,
@@ -136,6 +155,12 @@ const HELP = `SODA Intents CLI
   cancel           <intent>                                         user
   close            <intent> [--admin]                               user (cancelled) or admin (filled)
   status           <intent>
+  vault-deposit    --sol X                                          user: SOL into the RFQ vault
+  vault-withdraw   --sol X | --all                                  user (works while paused)
+  vault-info       [owner]
+  rfq-trade        --sol X [--recipient 0x..] [--relay URL] [--deadline-sec N] [--no-code-check]
+                   [--timeout SEC]   user: quotes from every solver (via the relay's /api/rfq, or
+                   SOLVER_URLS / --quote-url directly), sign the message, publish, follow
   balances
   pool-address
 
@@ -173,6 +198,9 @@ const { values: flags, positionals } = parseArgs({
     "min-eth": { type: "string" },
     "quote-url": { type: "string" },
     timeout: { type: "string" },
+    relay: { type: "string" },
+    "deadline-sec": { type: "string" },
+    all: { type: "boolean" },
     "no-code-check": { type: "boolean" },
     yes: { type: "boolean" },
     force: { type: "boolean" },
@@ -654,11 +682,16 @@ async function cmdTrade() {
   const timeoutMs = Number(str("timeout") ?? "300") * 1000;
   const { intent, sig, sentAt, confirmedAt } = await openIntent();
   console.log(`\nopen_intent confirmed in ${confirmedAt - sentAt} ms`);
+  await follow(intent, sentAt, confirmedAt, { open: { txHash: sig, timestamp: sentAt } }, timeoutMs);
+}
+
+/** Polls the intent's status until it completes, printing each step's time. */
+async function follow(intent: PublicKey, sentAt: number, since: number, refs: Partial<Record<StepId, StepRef>>, timeoutMs: number) {
   const seen = new Map<string, number>();
-  let last = confirmedAt;
+  let last = since;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const r = await computeStatus(intent, { open: { txHash: sig, timestamp: sentAt } });
+    const r = await computeStatus(intent, refs);
     if (!r) throw new Error("intent disappeared");
     for (const s of r.steps) {
       const key = `${s.id}:${s.state}`;
@@ -682,6 +715,195 @@ async function cmdTrade() {
     await sleep(1_000);
   }
   console.log(`\ntimed out; follow with: npx tsx scripts/intents-cli.ts status ${intent.toBase58()}`);
+}
+
+// ---------------------------------------------------------------- RFQ (NEAR-style)
+
+/** Exact decimal SOL (parseSol reads it back). */
+function solStr(lamports: bigint | number): string {
+  const l = BigInt(lamports);
+  const frac = (l % 1_000_000_000n).toString().padStart(9, "0").replace(/0+$/, "");
+  return `${l / 1_000_000_000n}${frac ? `.${frac}` : ""}`;
+}
+
+async function cmdVaultInfo() {
+  const owner = positionals[1] ? parseKey(positionals[1], "owner") : userKeypair().publicKey;
+  const [vault] = vaultPda(owner, pid);
+  console.log(`owner       ${owner.toBase58()} (wallet ${solStr(await conn.getBalance(owner))} SOL)`);
+  console.log(`vault       ${vault.toBase58()} ${solanaExplorerAddress(vault.toBase58())}`);
+  const info = await conn.getAccountInfo(vault);
+  if (!info) {
+    console.log("            not created yet: vault-deposit --sol X");
+    return;
+  }
+  const v = decodeUserVault(info.data);
+  const rent = await conn.getMinimumBalanceForRentExemption(USER_VAULT_SIZE);
+  console.log(`spendable   ${solStr(v.sol)} SOL (account holds ${solStr(info.lamports)}, rent ${solStr(rent)})`);
+}
+
+async function cmdVaultDeposit() {
+  const user = userKeypair();
+  const cfg = await requireConfig();
+  if (cfg.paused) throw new Error("intents program is paused (deposits are refused; withdrawals still work)");
+  const amount = parseSol(need("sol"));
+  const before = await fetchUserVault(conn, user.publicKey, pid);
+  const rent = before ? 0n : BigInt(await conn.getMinimumBalanceForRentExemption(USER_VAULT_SIZE));
+  const balance = BigInt(await conn.getBalance(user.publicKey));
+  if (balance < amount + rent + 10_000n) {
+    throw new Error(`wallet ${solStr(balance)} SOL < ${solStr(amount + rent)} SOL + fees`);
+  }
+  console.log(`user        ${user.publicKey.toBase58()}`);
+  console.log(`deposit     ${solStr(amount)} SOL into ${vaultPda(user.publicKey, pid)[0].toBase58()}${rent ? ` (creates it: +${solStr(rent)} SOL rent)` : ""}`);
+  await send(user, depositSolIx(program(user), user.publicKey, amount));
+  const after = await fetchUserVault(conn, user.publicKey, pid);
+  if (after) console.log(`spendable   ${solStr(after.sol)} SOL`);
+}
+
+async function cmdVaultWithdraw() {
+  const user = userKeypair();
+  const v = await fetchUserVault(conn, user.publicKey, pid);
+  if (!v) throw new Error("no vault for this wallet");
+  const amount = flags.all ? v.sol : parseSol(need("sol"));
+  if (amount === 0n) throw new Error("nothing to withdraw");
+  if (amount > v.sol) throw new Error(`vault holds ${solStr(v.sol)} SOL`);
+  console.log(`withdraw    ${solStr(amount)} of ${solStr(v.sol)} SOL to ${user.publicKey.toBase58()}`);
+  await send(user, withdrawSolIx(program(user), user.publicKey, amount));
+}
+
+type RfqQuote = { id: string; solver: string; amountOut: bigint; expirationTime: number; url?: string };
+
+function relayEndpoint(url: string): string {
+  const u = url.replace(/\/$/, "");
+  return u.endsWith("/api/rfq") ? u : `${u}/api/rfq`;
+}
+
+let rpcId = 0;
+async function relayCall<T>(url: string, method: string, params: Record<string, unknown>, timeoutMs = 30_000): Promise<T> {
+  const r = await fetch(relayEndpoint(url), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: ++rpcId, method, params }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  const body = (await r.json().catch(() => null)) as { result?: T; error?: { message?: string } | string } | null;
+  if (!body || body.error !== undefined || body.result === undefined) {
+    const e = body?.error;
+    throw new Error(`relay ${method}: ${typeof e === "string" ? e : (e?.message ?? `HTTP ${r.status}`)}`);
+  }
+  return body.result;
+}
+
+async function postJson<T>(url: string, body: unknown, timeoutMs: number): Promise<T> {
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  const out = (await r.json().catch(() => ({}))) as T & { error?: string };
+  if (!r.ok || out.error) throw new Error(out.error ?? `HTTP ${r.status}`);
+  return out;
+}
+
+/** Direct mode: every solver's /rfq/quote in parallel, 3 s each. */
+async function solverRfqQuotes(sell: bigint, recipient: Uint8Array): Promise<RfqQuote[]> {
+  const urls = (str("quote-url") ?? envStr("SOLVER_URLS", "http://localhost:8080")!)
+    .split(",")
+    .map((u) => u.trim().replace(/\/$/, ""))
+    .filter(Boolean);
+  const got = await Promise.all(
+    urls.map(async (url): Promise<RfqQuote | null> => {
+      const quoteId = randomUUID();
+      try {
+        const q = await postJson<RfqQuoteResponse>(
+          `${url}/rfq/quote`,
+          { quote_id: quoteId, exact_amount_in: sell.toString(), recipient: hexAddr(recipient) },
+          3_000,
+        );
+        if (q.quote_id !== quoteId) throw new Error(`answered quote ${q.quote_id}`);
+        return { id: quoteId, solver: q.solver, amountOut: BigInt(q.amount_out), expirationTime: q.expiration_time, url };
+      } catch (e) {
+        console.log(`  ${url}: ${e instanceof Error ? e.message : e}`);
+        return null;
+      }
+    }),
+  );
+  return got.filter((q): q is RfqQuote => q !== null).sort((a, b) => (b.amountOut > a.amountOut ? 1 : b.amountOut < a.amountOut ? -1 : 0));
+}
+
+async function relayRfqQuotes(relay: string, sell: bigint, recipient: Uint8Array): Promise<RfqQuote[]> {
+  const qs = await relayCall<RelayQuote[]>(relay, "quote", { exact_amount_in: sell.toString(), recipient: hexAddr(recipient) });
+  return qs.map((q) => ({ id: q.quote_hash, solver: q.solver, amountOut: BigInt(q.amount_out), expirationTime: q.expiration_time }));
+}
+
+/**
+ * NEAR-style trade: RFQ among the solvers, the user signs the canonical message
+ * (no transaction), the winning solver settles it with execute_signed_intent,
+ * then the payout is followed to Base like `trade`.
+ */
+async function cmdRfqTrade() {
+  const timeoutMs = Number(str("timeout") ?? "300") * 1000;
+  const user = userKeypair();
+  const cfg = await requireConfig();
+  if (cfg.paused) throw new Error("intents program is paused");
+  const sell = parseSol(need("sol"));
+  const recipient = str("recipient") ? parseEvmAddress(str("recipient")!) : walletEvmAddress(user.publicKey);
+  const deadlineSec = BigInt(str("deadline-sec") ?? "120");
+  if (deadlineSec < 10n || deadlineSec > RFQ_MAX_DEADLINE_SECS) throw new Error(`--deadline-sec must be 10..${RFQ_MAX_DEADLINE_SECS}`);
+  if (!flags["no-code-check"] && !(await isPlainAddress(base(), recipient))) {
+    throw new Error(`recipient ${checksumAddr(recipient)} has code; a 21000-gas payout to it would revert`);
+  }
+  const vault = await fetchUserVault(conn, user.publicKey, pid);
+  if (!vault || vault.sol < sell) {
+    const short = sell - (vault?.sol ?? 0n);
+    throw new Error(`vault holds ${solStr(vault?.sol ?? 0n)} SOL; first: npx tsx scripts/intents-cli.ts vault-deposit --sol ${solStr(short)}`);
+  }
+  console.log(`user        ${user.publicKey.toBase58()} (vault ${solStr(vault.sol)} SOL)`);
+  console.log(`sell        ${solStr(sell)} SOL`);
+  console.log(`recipient   ${checksumAddr(recipient)}${str("recipient") ? "" : " (your SODA-derived Base address)"}`);
+
+  const relay = str("relay");
+  const quoteAt = Date.now();
+  const quotes = relay ? await relayRfqQuotes(relay, sell, recipient) : await solverRfqQuotes(sell, recipient);
+  const quotedAt = Date.now();
+  console.log(`\nquotes (${quotes.length}) in ${quotedAt - quoteAt} ms${relay ? ` via ${relayEndpoint(relay)}` : ""}:`);
+  quotes.forEach((q, i) => {
+    const left = ((q.expirationTime - quotedAt) / 1000).toFixed(1);
+    console.log(`  ${i === 0 ? "*" : " "} ${formatEth(q.amountOut, 9).padEnd(12)} ETH  solver ${shortKey(q.solver)}  expires in ${left}s${q.url ? `  ${q.url}` : ""}`);
+  });
+  const best = quotes.find((q) => q.expirationTime > Date.now() + 2_000);
+  if (!best) throw new Error("no live quote");
+
+  const nonce = await newIntentNonce(conn, user.publicKey, pid);
+  const fields: IntentMessageFields = {
+    user: user.publicKey,
+    nonce,
+    deadline: (await clusterTime(conn)) + deadlineSec,
+    sellLamports: sell,
+    minOutWei: best.amountOut,
+    recipient,
+  };
+  const message = renderIntentMessage(fields, pid);
+  const signature = ed25519.sign(message, user.secretKey.slice(0, 32));
+  const wire = encodeSignedIntent(message, signature, user.publicKey);
+  const signedAt = Date.now();
+  console.log(`\nsigned (no transaction):\n${new TextDecoder().decode(message).replace(/^/gm, "  | ")}`);
+
+  let intent: PublicKey;
+  let tx: string;
+  if (relay) {
+    const r = await relayCall<RelayPublishResponse>(relay, "publish_intent", { quote_hash: best.id, ...wire }, 60_000);
+    [intent, tx] = [parseKey(r.intent, "intent"), r.tx];
+  } else {
+    const r = await postJson<RfqExecuteResponse>(`${best.url}/rfq/execute`, rfqExecuteRequest(best.id, fields, wire), 60_000);
+    [intent, tx] = [parseKey(r.intent, "intent"), r.signature];
+  }
+  const settledAt = Date.now();
+  const want = intentPda(user.publicKey, nonce, pid)[0];
+  if (!intent.equals(want)) throw new Error(`settlement returned intent ${intent.toBase58()}, expected ${want.toBase58()}`);
+  console.log(`\nsettled by ${shortKey(best.solver)} in ${settledAt - signedAt} ms: ${solanaExplorerTx(tx)}`);
+  console.log(`intent      ${intent.toBase58()}`);
+  await follow(intent, signedAt, settledAt, { open: { txHash: tx, timestamp: signedAt } }, timeoutMs);
 }
 
 // ---------------------------------------------------------------- balances
@@ -761,6 +983,10 @@ const commands: Record<string, () => Promise<void> | void> = {
   cancel: cmdCancel,
   close: cmdClose,
   status: cmdStatus,
+  "vault-deposit": cmdVaultDeposit,
+  "vault-withdraw": cmdVaultWithdraw,
+  "vault-info": cmdVaultInfo,
+  "rfq-trade": cmdRfqTrade,
   balances: cmdBalances,
   "pool-address": cmdPoolAddress,
 };
