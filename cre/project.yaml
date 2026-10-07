@@ -1,0 +1,14 @@
+# CRE project settings. Adapted from smartcontractkit/cre-templates
+# building-blocks/solana-read-write/solana-read-write-ts (MIT).
+# Base Sepolia is read over HTTP (BASE_RPC_URL secret), so only the Solana write chain is listed.
+# The URL comes from cre/.env: public devnet (https://api.devnet.solana.com) works but
+# often answers 429, so use a keyed devnet RPC; the key then stays out of git.
+simulation-settings:
+  rpcs:
+    - chain-name: solana-devnet
+      url: ${CRE_SOLANA_RPC_URL}
+
+production-settings:
+  rpcs:
+    - chain-name: solana-devnet
+      url: ${CRE_SOLANA_RPC_URL}
