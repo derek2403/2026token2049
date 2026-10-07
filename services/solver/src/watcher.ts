@@ -5,7 +5,8 @@
 // in-memory index of the accounts the solver cares about:
 //
 //   open        IntentOpened minus IntentFilled / IntentCancelled
-//   filled      IntentFilled (plus GasBumped), payouts that may still need delivery
+//   filled      IntentFilled (plus GasBumped, and SignedIntentExecuted for RFQ
+//               settlements), payouts that may still need delivery
 //   withdrawals SolverWithdrew (plus WithdrawalGasBumped), by pool nonce
 //   nonces      every pool nonce an event (or an account read) has shown in use
 //
@@ -796,6 +797,18 @@ export class ProgramWatcher {
         break;
       }
       case "Other": {
+        if (ev.eventName === "SignedIntentExecuted") {
+          // RFQ: its IntentFilled comes in the same transaction; this alone is enough to index the payout.
+          const intent = rawKey(raw(ev.data, "intent"));
+          const nonce = rawBig(raw(ev.data, "base_nonce"));
+          if (!intent || nonce === undefined) break;
+          this.open.delete(intent.toBase58());
+          const f = this.filledEntry(intent);
+          f.solver ??= rawKey(raw(ev.data, "solver"));
+          f.baseNonce ??= nonce;
+          this.noteNonce(nonce, intent.toBase58());
+          break;
+        }
         if (ev.eventName !== "SolverWithdrew" && ev.eventName !== "WithdrawalGasBumped") break;
         const nonce = rawBig(raw(ev.data, "base_nonce"));
         if (nonce === undefined) break;
