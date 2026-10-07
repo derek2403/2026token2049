@@ -10,6 +10,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "solver": "tsx services/solver/src/index.ts",
     "cli": "tsx scripts/intents-cli.ts",
+    "demo:cre": "tsx scripts/demo-cre.ts",
     "test:lib": "tsx --test lib/intents/*.test.ts",
     "test:solver": "tsx --test services/solver/src/*.test.ts",
     "test:programs": "tsx --test programs/tests/*.test.ts",
