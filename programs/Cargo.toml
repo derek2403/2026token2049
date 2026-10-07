@@ -1,0 +1,28 @@
+[workspace]
+# Stays at 2: anchor-cli 0.32.1 parses this manifest itself and rejects "3".
+# Same pins as frontier (SODA): Solana 3.1.10 bundles an old cargo, so
+# Cargo.lock is committed and never re-resolved by it.
+resolver = "2"
+members = [
+    "programs/intents",
+    "programs/soda_witness",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.84"
+
+[workspace.dependencies]
+anchor-lang = "0.32.1"
+solana-program = "2.1.14"
+
+[profile.release]
+overflow-checks = true
+lto = "fat"
+codegen-units = 1
+
+[profile.release.build-override]
+opt-level = 3
+incremental = false
+codegen-units = 1
