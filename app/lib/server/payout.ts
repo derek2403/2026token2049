@@ -17,10 +17,11 @@ import {
   type EthReceipt,
   type IntentAccount,
 } from "@/lib/intents";
-import type { IntentJson, PayoutResponse, PayoutStep, SigningTiming } from "@/app/lib/api-types";
+import type { IntentJson, PayoutResponse, PayoutStep, ProvidersMap, SignerInfo, SigningTiming } from "@/app/lib/api-types";
 import { toChecksumAddress } from "@/app/lib/eth";
 import { BASE_RPC_MISSING, getBaseRpc } from "@/app/lib/server/base";
 import { cachedIntentHistory, finalizeRef, type SlotRef } from "@/app/lib/server/history";
+import { attributeFinalize } from "@/app/lib/server/signer-attribution";
 import { publicError } from "@/app/lib/server/solana";
 
 /** Solana's target slot time; real slots run a little slower. */
@@ -68,6 +69,17 @@ function signingTiming(from: SlotRef, to: SlotRef): SigningTiming {
   };
 }
 
+/** Which component handles each stage; `sign` is filled per order. */
+export function providersFor(sign: SignerInfo["via"]): ProvidersMap {
+  return {
+    quote: "Solvers (off-chain)",
+    settle: "Solana program",
+    sign,
+    deliver: "Base",
+    depositProof: "Chainlink CRE (Witness)",
+  };
+}
+
 export type PayoutResult = { ok: true; body: PayoutResponse } | { ok: false; status: number; error: string; closed?: boolean };
 
 export async function loadPayout(conn: Connection, address: PublicKey): Promise<PayoutResult> {
@@ -107,6 +119,21 @@ export async function loadPayout(conn: Connection, address: PublicKey): Promise<
         const from = history.creatorBySigRequest.get(firstCompleted.sigRequest.toBase58());
         if (from) signing = signingTiming(from, fin);
       }
+    }
+
+    // Chainlink CRE or the committee's subscriber: read from the finalize tx itself.
+    let signer: SignerInfo = { via: "pending", label: "pending" };
+    if (firstCompleted) {
+      const a = await attributeFinalize(conn, firstCompleted.sigRequest).catch(() => null);
+      if (a) {
+        signer = { via: a.via, label: a.via === "pending" ? "pending" : a.label };
+        if (a.finalizeTx) signer.finalizeTx = a.finalizeTx;
+        if (a.forwarder) signer.forwarder = a.forwarder;
+      }
+    }
+    if (signing && signer.via !== "pending") {
+      signing.via = signer.via;
+      if (signer.finalizeTx) signing.finalizeTx = signer.finalizeTx;
     }
 
     // Receipts for every signed candidate: after a gas bump either one can land.
@@ -157,6 +184,8 @@ export async function loadPayout(conn: Connection, address: PublicKey): Promise<
       steps,
       isRfq: isRfqIntent(intent),
       signing,
+      signer,
+      providers: providersFor(signer.via),
       candidates: s.candidates.map((c) => ({
         index: c.index,
         sigRequest: c.sigRequest.toBase58(),
