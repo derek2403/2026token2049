@@ -39,12 +39,6 @@ export function Header({
     <header className="sticky top-0 z-40 flex h-[72px] items-center justify-between gap-2 px-2 backdrop-blur-[25px] sm:px-5">
       <div className="flex items-center gap-2 sm:gap-6">
         <Logo />
-        <Link
-          href="/demo"
-          className="hidden h-10 items-center rounded-full px-4 text-base text-fg transition hover:bg-panel-hover sm:flex"
-        >
-          Demo
-        </Link>
       </div>
       <div className="flex items-center gap-2">
         <WalletButton onOpen={onAccount} />
@@ -252,9 +246,6 @@ function OverlayMenu({ onActivity }: { onActivity: () => void }) {
                   }}
                 >
                   Activity
-                </MenuItem>
-                <MenuItem href="/demo" internal>
-                  Demo
                 </MenuItem>
               </MenuColumn>
               <MenuColumn title="On chain">
